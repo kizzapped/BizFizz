@@ -30,7 +30,18 @@ class BizFizzAPITester(unittest.TestCase):
             self.assertEqual(data["status"], "healthy")
             self.assertEqual(data["service"], "BizFizz API")
             
+            # Check API integrations
+            self.assertIn("integrations", data)
+            self.assertIsInstance(data["integrations"], dict)
+            self.assertIn("google_maps", data["integrations"])
+            self.assertIn("openai", data["integrations"])
+            self.assertIn("yelp", data["integrations"])
+            
+            # Store integration status for later tests
+            self.api_integrations = data["integrations"]
+            
             print(f"✅ Health check passed - Status: {response.status_code}")
+            print(f"✅ API Integrations: Google Maps: {data['integrations']['google_maps']}, OpenAI: {data['integrations']['openai']}, Yelp: {data['integrations']['yelp']}")
             self.tests_passed += 1
         except Exception as e:
             print(f"❌ Health check failed - Error: {str(e)}")
