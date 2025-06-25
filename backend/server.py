@@ -12,7 +12,11 @@ import googlemaps
 import requests
 from openai import OpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
 import logging
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
