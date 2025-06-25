@@ -53,8 +53,8 @@ class BizFizzAPITester(unittest.TestCase):
         
         try:
             payload = {
-                "location": "New York, NY",
-                "radius": 5,
+                "location": self.location,
+                "radius": 2,  # 2-mile radius as per test requirements
                 "business_type": "restaurant"
             }
             
@@ -74,13 +74,34 @@ class BizFizzAPITester(unittest.TestCase):
             
             # Validate data types
             self.assertIsInstance(data["search_id"], str)
-            self.assertEqual(data["location"], "New York, NY")
+            self.assertEqual(data["location"], self.location)
             self.assertIsInstance(data["competitors"], list)
             self.assertIsInstance(data["total_found"], int)
             
+            # Check if we got real data from Yelp or Google
+            if self.api_integrations.get("yelp") or self.api_integrations.get("google_maps"):
+                print(f"  Checking for real restaurant data from Yelp/Google...")
+                
+                # Check for Yelp-specific fields in the first competitor
+                if data["competitors"] and len(data["competitors"]) > 0:
+                    first_comp = data["competitors"][0]
+                    has_real_data = False
+                    
+                    if "yelp_id" in first_comp:
+                        print(f"  ✓ Found Yelp data (yelp_id present)")
+                        has_real_data = True
+                    elif "place_id" in first_comp:
+                        print(f"  ✓ Found Google Places data (place_id present)")
+                        has_real_data = True
+                    
+                    if "categories" in first_comp:
+                        print(f"  ✓ Found restaurant categories from Yelp")
+                        has_real_data = True
+                    
+                    self.assertTrue(has_real_data, "No real data from Yelp or Google found in competitors")
+            
             # Store competitor IDs for later tests
             self.competitor_ids = [comp["id"] for comp in data["competitors"]]
-            self.location = data["location"]
             
             print(f"✅ Search competitors passed - Found {data['total_found']} competitors")
             self.tests_passed += 1
