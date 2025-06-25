@@ -290,14 +290,31 @@ async def analyze_reviews(request: Dict[str, List[str]]):
         raise HTTPException(status_code=500, detail="Failed to analyze reviews")
 
 @app.post("/api/generate-report")
-async def generate_report(competitor_ids: List[str], location: str):
+async def generate_report(request: Dict[str, Any]):
     """Generate comprehensive competitor report"""
     try:
+        competitor_ids = request.get("competitor_ids", [])
+        location = request.get("location", "")
+        
         # Simulate report generation
         await asyncio.sleep(1)
         
-        # Get competitor details
-        competitors = [comp for comp in MOCK_COMPETITORS if comp["id"] in competitor_ids]
+        # Get competitor details from mock data or previous searches
+        competitors = []
+        
+        # For demo purposes, generate competitor info based on IDs
+        for comp_id in competitor_ids:
+            competitor = {
+                "id": comp_id,
+                "name": f"Restaurant {comp_id[:8]}",
+                "address": f"Address for {comp_id[:8]}",
+                "location": {"lat": 40.7128, "lng": -74.0060},
+                "business_type": "restaurant",
+                "rating": 4.2 + (len(comp_id) % 5) * 0.1,
+                "review_count": 200 + len(comp_id) * 10,
+                "price_level": 2 + (len(comp_id) % 3)
+            }
+            competitors.append(competitor)
         
         # Generate insights and recommendations
         insights = [
@@ -322,12 +339,13 @@ async def generate_report(competitor_ids: List[str], location: str):
             "competitors": competitors,
             "insights": insights,
             "recommendations": recommendations,
-            "report_date": datetime.utcnow(),
+            "report_date": datetime.utcnow().isoformat(),
             "total_competitors": len(competitors)
         }
         
         # Store report in database
-        await db.reports.insert_one(report)
+        report_copy = report.copy()
+        await db.reports.insert_one(report_copy)
         
         return report
         
