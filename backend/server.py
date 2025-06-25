@@ -9,6 +9,7 @@ import uuid
 import json
 import asyncio
 import googlemaps
+from openai import OpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 
@@ -39,6 +40,10 @@ db = client.bizfizz
 # Google Maps client
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
+
+# OpenAI client
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Pydantic models
 class GeographicSearch(BaseModel):
