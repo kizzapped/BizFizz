@@ -229,16 +229,21 @@ def run_tests():
     tester = BizFizzAPITester()
     
     # Add tests in order
-    suite.addTest(tester)
+    suite.addTest(BizFizzAPITester('test_01_health_check'))
+    suite.addTest(BizFizzAPITester('test_02_search_competitors'))
+    suite.addTest(BizFizzAPITester('test_03_analyze_reviews'))
+    suite.addTest(BizFizzAPITester('test_04_generate_report'))
+    suite.addTest(BizFizzAPITester('test_05_get_reports'))
+    suite.addTest(BizFizzAPITester('test_06_subscription_tiers'))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     
     # Print summary
-    success = tester.print_summary()
+    tester.print_summary()
     
-    return 0 if success else 1
+    return 0 if result.wasSuccessful() else 1
 
 if __name__ == "__main__":
     sys.exit(run_tests())
