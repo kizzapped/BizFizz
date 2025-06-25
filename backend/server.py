@@ -150,7 +150,7 @@ def get_mock_competitors(business_type):
     ]
 
 def search_yelp_businesses(location, radius, business_type="restaurant"):
-    """Search Yelp for businesses"""
+    """Search Yelp for businesses with comprehensive data"""
     if not YELP_API_KEY:
         return []
     
@@ -163,7 +163,8 @@ def search_yelp_businesses(location, radius, business_type="restaurant"):
             'location': location,
             'radius': int(radius * 1609.34),  # Convert miles to meters
             'categories': 'restaurants',
-            'limit': 20
+            'limit': 20,
+            'sort_by': 'rating'  # Sort by rating for better quality results
         }
         
         response = requests.get(
@@ -177,6 +178,18 @@ def search_yelp_businesses(location, radius, business_type="restaurant"):
             competitors = []
             
             for business in data.get('businesses', []):
+                # Calculate estimated metrics based on available data
+                review_count = business.get('review_count', 0)
+                rating = business.get('rating', 0)
+                
+                # Estimate daily foot traffic based on reviews and rating
+                estimated_daily_traffic = min(max(int(review_count / 30), 10), 500)
+                
+                # Estimate revenue based on price level and traffic
+                price_level = len(business.get('price', '$'))
+                avg_check = price_level * 25  # Rough estimate: $=25, $$=50, etc.
+                estimated_monthly_revenue = estimated_daily_traffic * avg_check * 30
+                
                 competitor = {
                     "id": str(uuid.uuid4()),
                     "name": business.get('name', 'Unknown'),
@@ -190,9 +203,35 @@ def search_yelp_businesses(location, radius, business_type="restaurant"):
                     "website": business.get('url'),
                     "rating": business.get('rating'),
                     "review_count": business.get('review_count'),
-                    "price_level": len(business.get('price', '$')),
+                    "price_level": price_level,
                     "yelp_id": business.get('id'),
-                    "categories": [cat['title'] for cat in business.get('categories', [])]
+                    "categories": [cat['title'] for cat in business.get('categories', [])],
+                    
+                    # Enhanced competitive intelligence data
+                    "business_metrics": {
+                        "estimated_daily_traffic": estimated_daily_traffic,
+                        "estimated_monthly_revenue": estimated_monthly_revenue,
+                        "avg_check_estimate": avg_check,
+                        "customer_satisfaction_score": rating * 20,  # Convert to 100-point scale
+                        "market_position": "Premium" if price_level >= 3 else "Mid-Range" if price_level == 2 else "Budget",
+                        "review_velocity": review_count / max(1, (2024 - 2020)),  # Reviews per year estimate
+                        "competitive_strength": min(100, (rating * 15) + (min(review_count/100, 10) * 5))
+                    },
+                    
+                    "operational_data": {
+                        "is_open_now": business.get('is_closed', True) == False,
+                        "delivery_available": any('delivery' in cat['alias'].lower() for cat in business.get('categories', [])),
+                        "takeout_available": True,  # Most restaurants offer takeout
+                        "outdoor_seating": any('outdoor' in cat['title'].lower() for cat in business.get('categories', [])),
+                        "reservation_required": price_level >= 3,  # Higher-end places usually require reservations
+                    },
+                    
+                    "social_presence": {
+                        "has_website": bool(business.get('url')),
+                        "social_engagement_estimate": min(100, review_count / 20),  # Rough social engagement score
+                        "online_reputation_score": rating * 20,
+                        "review_sentiment": "Positive" if rating >= 4.0 else "Mixed" if rating >= 3.0 else "Negative"
+                    }
                 }
                 competitors.append(competitor)
             
