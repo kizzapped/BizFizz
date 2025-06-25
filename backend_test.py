@@ -338,6 +338,7 @@ def run_tests():
     suite.addTest(BizFizzAPITester('test_04_generate_report'))
     suite.addTest(BizFizzAPITester('test_05_get_reports'))
     suite.addTest(BizFizzAPITester('test_06_subscription_tiers'))
+    suite.addTest(BizFizzAPITester('test_07_error_handling'))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
