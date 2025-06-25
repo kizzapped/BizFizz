@@ -11,6 +11,9 @@ class BizFizzAPITester(unittest.TestCase):
         self.base_url = "https://090f1bbb-1ae7-49b3-b27a-6fd8915a0f58.preview.emergentagent.com"
         self.tests_run = 0
         self.tests_passed = 0
+        self.competitor_ids = []
+        self.location = "New York, NY"
+        self.report_id = None
 
     def setUp(self):
         self.tests_run += 1
@@ -69,6 +72,9 @@ class BizFizzAPITester(unittest.TestCase):
             
             print(f"✅ Search competitors passed - Found {data['total_found']} competitors")
             self.tests_passed += 1
+            
+            # Return the competitor IDs for other tests
+            return self.competitor_ids
         except Exception as e:
             print(f"❌ Search competitors failed - Error: {str(e)}")
             raise
@@ -77,10 +83,9 @@ class BizFizzAPITester(unittest.TestCase):
         """Test the analyze reviews endpoint"""
         print(f"\n🔍 Testing analyze reviews endpoint...")
         
-        # Skip if no competitor IDs from previous test
-        if not hasattr(self, 'competitor_ids') or not self.competitor_ids:
-            print("⚠️ Skipping analyze reviews test - No competitor IDs available")
-            return
+        # Make sure we have competitor IDs
+        if not self.competitor_ids:
+            self.test_02_search_competitors()
         
         try:
             # Use the first two competitor IDs
@@ -117,10 +122,9 @@ class BizFizzAPITester(unittest.TestCase):
         """Test the generate report endpoint"""
         print(f"\n🔍 Testing generate report endpoint...")
         
-        # Skip if no competitor IDs from previous test
-        if not hasattr(self, 'competitor_ids') or not self.competitor_ids:
-            print("⚠️ Skipping generate report test - No competitor IDs available")
-            return
+        # Make sure we have competitor IDs
+        if not self.competitor_ids:
+            self.test_02_search_competitors()
         
         try:
             # Use the first two competitor IDs
@@ -128,7 +132,7 @@ class BizFizzAPITester(unittest.TestCase):
             
             payload = {
                 "competitor_ids": test_ids,
-                "location": self.location if hasattr(self, 'location') else "New York, NY"
+                "location": self.location
             }
             
             response = requests.post(
@@ -171,8 +175,8 @@ class BizFizzAPITester(unittest.TestCase):
             self.assertIsInstance(data["reports"], list)
             
             # Check if our previously generated report is in the list
-            if hasattr(self, 'report_id') and data["reports"]:
-                report_ids = [report["id"] for report in data["reports"]]
+            if self.report_id and data["reports"]:
+                report_ids = [report.get("id") for report in data["reports"] if "id" in report]
                 if self.report_id in report_ids:
                     print(f"  Found our previously generated report in the list")
             
@@ -215,9 +219,6 @@ class BizFizzAPITester(unittest.TestCase):
             print(f"❌ Subscription tiers failed - Error: {str(e)}")
             raise
 
-    def tearDown(self):
-        pass
-
     def print_summary(self):
         print(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
         return self.tests_passed == self.tests_run
@@ -228,12 +229,7 @@ def run_tests():
     tester = BizFizzAPITester()
     
     # Add tests in order
-    suite.addTest(BizFizzAPITester('test_01_health_check'))
-    suite.addTest(BizFizzAPITester('test_02_search_competitors'))
-    suite.addTest(BizFizzAPITester('test_03_analyze_reviews'))
-    suite.addTest(BizFizzAPITester('test_04_generate_report'))
-    suite.addTest(BizFizzAPITester('test_05_get_reports'))
-    suite.addTest(BizFizzAPITester('test_06_subscription_tiers'))
+    suite.addTest(tester)
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
