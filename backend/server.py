@@ -137,17 +137,51 @@ async def health_check():
 async def search_competitors(search: GeographicSearch):
     """Search for competitors in a geographic area"""
     try:
-        # In production, this would use Google Places API
-        # For now, return mock data
+        logger.info(f"Searching for competitors in {search.location}")
         
-        # Simulate API delay
-        await asyncio.sleep(1)
+        competitors = []
         
-        # Filter mock competitors by business type
-        filtered_competitors = [
-            comp for comp in MOCK_COMPETITORS 
-            if comp["business_type"] == search.business_type
-        ]
+        if gmaps:
+            # Use real Google Places API
+            try:
+                # Search for restaurants near the location
+                places_result = gmaps.places_nearby(
+                    location=search.location,
+                    radius=search.radius * 1609.34,  # Convert miles to meters
+                    type='restaurant',
+                    keyword='restaurant'
+                )
+                
+                # Process the results
+                for place in places_result.get('results', []):
+                    competitor = {
+                        "id": str(uuid.uuid4()),
+                        "name": place.get('name', 'Unknown'),
+                        "address": place.get('vicinity', 'Unknown'),
+                        "location": {
+                            "lat": place.get('geometry', {}).get('location', {}).get('lat', 0),
+                            "lng": place.get('geometry', {}).get('location', {}).get('lng', 0)
+                        },
+                        "business_type": search.business_type,
+                        "rating": place.get('rating'),
+                        "review_count": place.get('user_ratings_total'),
+                        "price_level": place.get('price_level'),
+                        "place_id": place.get('place_id'),
+                        "photos": place.get('photos', [])[:1]  # Just first photo
+                    }
+                    competitors.append(competitor)
+                
+                logger.info(f"Found {len(competitors)} competitors via Google Places API")
+                
+            except Exception as e:
+                logger.error(f"Google Places API error: {str(e)}")
+                # Fall back to mock data
+                competitors = get_mock_competitors(search.business_type)
+                
+        else:
+            # Use mock data if no API key
+            logger.info("Using mock data - no Google Maps API key")
+            competitors = get_mock_competitors(search.business_type)
         
         # Store search in database
         search_record = {
@@ -155,7 +189,7 @@ async def search_competitors(search: GeographicSearch):
             "location": search.location,
             "radius": search.radius,
             "business_type": search.business_type,
-            "results_count": len(filtered_competitors),
+            "results_count": len(competitors),
             "timestamp": datetime.utcnow()
         }
         
@@ -164,13 +198,54 @@ async def search_competitors(search: GeographicSearch):
         return {
             "search_id": search_record["id"],
             "location": search.location,
-            "competitors": filtered_competitors,
-            "total_found": len(filtered_competitors)
+            "competitors": competitors,
+            "total_found": len(competitors)
         }
         
     except Exception as e:
         logger.error(f"Error searching competitors: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to search competitors")
+
+def get_mock_competitors(business_type):
+    """Get mock competitor data"""
+    return [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "The Local Bistro",
+            "address": "123 Main Street, Downtown",
+            "location": {"lat": 40.7128, "lng": -74.0060},
+            "business_type": business_type,
+            "phone": "(555) 123-4567",
+            "website": "thelocalbistro.com",
+            "rating": 4.2,
+            "review_count": 342,
+            "price_level": 3
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Giuseppe's Italian Kitchen",
+            "address": "456 Oak Avenue, Midtown",
+            "location": {"lat": 40.7589, "lng": -73.9851},
+            "business_type": business_type,
+            "phone": "(555) 987-6543",
+            "website": "giuseppesitalian.com",
+            "rating": 4.5,
+            "review_count": 567,
+            "price_level": 2
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Sakura Sushi Bar",
+            "address": "789 Cherry Lane, Uptown",
+            "location": {"lat": 40.7831, "lng": -73.9712},
+            "business_type": business_type,
+            "phone": "(555) 456-7890",
+            "website": "sakurasushi.com",
+            "rating": 4.7,
+            "review_count": 289,
+            "price_level": 4
+        }
+    ]
 
 @app.post("/api/analyze-reviews")
 async def analyze_reviews(competitor_ids: List[str]):
