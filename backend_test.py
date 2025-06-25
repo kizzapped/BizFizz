@@ -273,6 +273,54 @@ class BizFizzAPITester(unittest.TestCase):
         except Exception as e:
             print(f"❌ Subscription tiers failed - Error: {str(e)}")
             raise
+    def test_07_error_handling(self):
+        """Test error handling with invalid inputs"""
+        print(f"\n🔍 Testing error handling...")
+        
+        try:
+            # Test with invalid location
+            invalid_location_payload = {
+                "location": "",  # Empty location
+                "radius": 5,
+                "business_type": "restaurant"
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/search-competitors",
+                json=invalid_location_payload
+            )
+            
+            print(f"  Testing empty location - Status: {response.status_code}")
+            # Should either return 400 Bad Request or empty results
+            if response.status_code == 400:
+                print(f"  ✓ API correctly rejected empty location with 400 status")
+            elif response.status_code == 200:
+                data = response.json()
+                if data.get("total_found", 0) == 0 or len(data.get("competitors", [])) == 0:
+                    print(f"  ✓ API handled empty location by returning empty results")
+                else:
+                    print(f"  ⚠️ API accepted empty location and returned results")
+            
+            # Test report generation with empty competitor IDs
+            empty_competitors_payload = {
+                "competitor_ids": [],
+                "location": self.location
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate-report",
+                json=empty_competitors_payload
+            )
+            
+            print(f"  Testing empty competitor selection - Status: {response.status_code}")
+            # Should return 400 Bad Request
+            self.assertEqual(response.status_code, 400)
+            
+            print(f"✅ Error handling tests passed")
+            self.tests_passed += 1
+        except Exception as e:
+            print(f"❌ Error handling tests failed - Error: {str(e)}")
+            raise
 
     def print_summary(self):
         print(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
