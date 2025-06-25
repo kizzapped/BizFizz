@@ -359,7 +359,7 @@ async def get_reports(limit: int = 10):
     try:
         reports = []
         async for report in db.reports.find().sort("report_date", -1).limit(limit):
-            # Convert ObjectId to string if present
+            # Convert ObjectId to string if present and clean up document
             if "_id" in report:
                 del report["_id"]
             reports.append(report)
