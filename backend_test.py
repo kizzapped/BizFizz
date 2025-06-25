@@ -168,8 +168,8 @@ class BizFizzAPITester(unittest.TestCase):
             self.test_02_search_competitors()
         
         try:
-            # Use the first two competitor IDs
-            test_ids = self.competitor_ids[:2]
+            # Use the first three competitor IDs
+            test_ids = self.competitor_ids[:3]
             
             payload = {
                 "competitor_ids": test_ids,
@@ -180,28 +180,6 @@ class BizFizzAPITester(unittest.TestCase):
                 f"{self.base_url}/api/generate-report",
                 json=payload
             )
-            
-            # Check if we got a 422 error (likely due to incorrect payload format)
-            if response.status_code == 422:
-                print(f"⚠️ Known issue: generate-report endpoint returns 422 - Unprocessable Entity")
-                print(f"⚠️ The API expects a different payload format than what's documented")
-                
-                # Try with a different payload format
-                alt_payload = {
-                    "competitor_ids": test_ids,
-                    "location": self.location
-                }
-                
-                response = requests.post(
-                    f"{self.base_url}/api/generate-report",
-                    json=alt_payload
-                )
-                
-                if response.status_code != 200:
-                    print(f"⚠️ Alternative payload also failed with status {response.status_code}")
-                    print(f"⚠️ This should be fixed in the backend code")
-                    self.tests_passed += 1
-                    return
             
             self.assertEqual(response.status_code, 200)
             data = response.json()
@@ -214,10 +192,24 @@ class BizFizzAPITester(unittest.TestCase):
             self.assertIn("recommendations", data)
             self.assertIn("report_date", data)
             
+            # Check for AI-generated content if OpenAI integration is enabled
+            if self.api_integrations.get("openai"):
+                print(f"  Checking for AI-generated insights and recommendations...")
+                self.assertIn("generated_with_ai", data)
+                self.assertTrue(data["generated_with_ai"], "Report should be generated with AI")
+                
+                # Verify insights and recommendations are not mock data
+                if data["insights"]:
+                    # Check if insights contain location-specific information
+                    location_mentioned = any(self.location in insight for insight in data["insights"])
+                    self.assertTrue(location_mentioned or any("competitor" in insight.lower() for insight in data["insights"]), 
+                                   "AI insights should mention location or competitors")
+            
             # Store report ID for later tests
             self.report_id = data["id"]
             
             print(f"✅ Generate report passed - Report ID: {data['id']}")
+            print(f"  Sample insights: {data['insights'][0] if data['insights'] else 'None'}")
             self.tests_passed += 1
         except Exception as e:
             print(f"❌ Generate report failed - Error: {str(e)}")
