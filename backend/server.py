@@ -8,6 +8,7 @@ import os
 import uuid
 import json
 import asyncio
+import googlemaps
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 
@@ -34,6 +35,10 @@ app.add_middleware(
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.bizfizz
+
+# Google Maps client
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
+gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
 
 # Pydantic models
 class GeographicSearch(BaseModel):
