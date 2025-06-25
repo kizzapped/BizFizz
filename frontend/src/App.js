@@ -152,17 +152,20 @@ function App() {
                   placeholder="Enter your location (zip code, city, address)"
                   value={searchLocation}
                   onChange={(e) => setSearchLocation(e.target.value)}
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onKeyPress={(e) => e.key === 'Enter' && searchCompetitors()}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                  autoComplete="address-level2"
                 />
                 <select
                   value={searchRadius}
                   onChange={(e) => setSearchRadius(Number(e.target.value))}
-                  className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[120px]"
                 >
                   <option value={1}>1 mile</option>
                   <option value={3}>3 miles</option>
                   <option value={5}>5 miles</option>
                   <option value={10}>10 miles</option>
+                  <option value={15}>15 miles</option>
                 </select>
               </div>
               <button
