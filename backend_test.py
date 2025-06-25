@@ -12,8 +12,9 @@ class BizFizzAPITester(unittest.TestCase):
         self.tests_run = 0
         self.tests_passed = 0
         self.competitor_ids = []
-        self.location = "New York, NY"
+        self.location = "Times Square, New York"
         self.report_id = None
+        self.api_integrations = {}
 
     def setUp(self):
         self.tests_run += 1
