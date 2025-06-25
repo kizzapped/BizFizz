@@ -265,7 +265,7 @@ function App() {
           {competitors.map((competitor) => (
             <div
               key={competitor.id}
-              className={`bg-white p-6 rounded-lg shadow-sm border-2 cursor-pointer transition-all ${
+              className={`bg-white p-6 rounded-lg shadow-sm border-2 cursor-pointer transition-all hover:shadow-md ${
                 selectedCompetitors.includes(competitor.id)
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
@@ -273,25 +273,78 @@ function App() {
               onClick={() => toggleCompetitorSelection(competitor.id)}
             >
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
                   {competitor.name}
                 </h3>
-                <div className="flex items-center">
+                <div className="flex items-center ml-2">
                   <span className="text-yellow-500 mr-1">★</span>
-                  <span className="text-sm text-gray-600">{competitor.rating}</span>
+                  <span className="text-sm font-medium text-gray-700">{competitor.rating || 'N/A'}</span>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-2">{competitor.address}</p>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">
-                  {competitor.review_count} reviews
-                </span>
-                <span className="text-gray-500">
-                  {'$'.repeat(competitor.price_level)}
-                </span>
+              
+              <div className="space-y-3 mb-4">
+                <div className="flex items-start">
+                  <span className="text-gray-500 text-sm mr-2">📍</span>
+                  <p className="text-sm text-gray-600 line-clamp-2">{competitor.address}</p>
+                </div>
+                
+                {competitor.phone && (
+                  <div className="flex items-center">
+                    <span className="text-gray-500 text-sm mr-2">📞</span>
+                    <p className="text-sm text-gray-600">{competitor.phone}</p>
+                  </div>
+                )}
+                
+                {competitor.categories && competitor.categories.length > 0 && (
+                  <div className="flex items-start">
+                    <span className="text-gray-500 text-sm mr-2">🍽️</span>
+                    <div className="flex flex-wrap gap-1">
+                      {competitor.categories.slice(0, 3).map((category, index) => (
+                        <span 
+                          key={index}
+                          className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                      {competitor.categories.length > 3 && (
+                        <span className="text-gray-500 text-xs">+{competitor.categories.length - 3} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+              
+              <div className="flex justify-between items-center text-sm border-t pt-3">
+                <div className="flex items-center space-x-4">
+                  <span className="text-gray-500 flex items-center">
+                    <span className="mr-1">👥</span>
+                    {competitor.review_count || 0} reviews
+                  </span>
+                  <span className="text-gray-500 flex items-center">
+                    <span className="mr-1">💰</span>
+                    {'$'.repeat(competitor.price_level || 1)}
+                  </span>
+                </div>
+                
+                {selectedCompetitors.includes(competitor.id) && (
+                  <span className="text-blue-600 font-medium">✓ Selected</span>
+                )}
+              </div>
+              
               {competitor.website && (
-                <p className="text-xs text-blue-600 mt-2">{competitor.website}</p>
+                <div className="mt-3 pt-3 border-t">
+                  <a 
+                    href={competitor.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 text-xs flex items-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="mr-1">🔗</span>
+                    View on Yelp
+                  </a>
+                </div>
               )}
             </div>
           ))}
