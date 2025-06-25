@@ -48,7 +48,18 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 YELP_API_KEY = os.environ.get('YELP_API_KEY')
 
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+# Initialize OpenAI client with proper error handling
+openai_client = None
+if OPENAI_API_KEY:
+    try:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+        openai_client = None
+
+# Log API key status
+logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}")
 
 # Pydantic models
 class GeographicSearch(BaseModel):
