@@ -248,9 +248,11 @@ def get_mock_competitors(business_type):
     ]
 
 @app.post("/api/analyze-reviews")
-async def analyze_reviews(competitor_ids: List[str]):
+async def analyze_reviews(request: Dict[str, List[str]]):
     """Analyze reviews for selected competitors"""
     try:
+        competitor_ids = request.get("competitor_ids", [])
+        
         # Simulate API delay
         await asyncio.sleep(2)
         
@@ -272,13 +274,14 @@ async def analyze_reviews(competitor_ids: List[str]):
                     "Customers praising new menu items",
                     "Some concerns about wait times during peak hours"
                 ],
-                "analysis_date": datetime.utcnow()
+                "analysis_date": datetime.utcnow().isoformat()
             }
             analyses.append(analysis)
         
-        # Store analyses in database
+        # Store analyses in database (convert datetime to string)
         for analysis in analyses:
-            await db.review_analyses.insert_one(analysis)
+            analysis_copy = analysis.copy()
+            await db.review_analyses.insert_one(analysis_copy)
         
         return {"analyses": analyses}
         
