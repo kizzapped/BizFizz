@@ -290,7 +290,7 @@ function App() {
               <p className="text-gray-600">Interactive charts and graphs showing market trends, competitor performance, and revenue analysis</p>
             </div>
             <div className="text-center">
-              <FaTrendingUp className="text-4xl text-green-500 mx-auto mb-4" />
+              <FaChartLine className="text-4xl text-green-500 mx-auto mb-4" />
               <h4 className="text-xl font-semibold mb-2">Real-time Monitoring</h4>
               <p className="text-gray-600">Continuous monitoring of competitor activities, pricing changes, and market shifts</p>
             </div>
