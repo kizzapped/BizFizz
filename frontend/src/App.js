@@ -416,12 +416,26 @@ function App() {
                   Home
                 </button>
                 {userType === 'business' && (
-                  <button 
-                    onClick={() => setCurrentPage('dashboard')}
-                    className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                  >
-                    Dashboard
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => setCurrentPage('dashboard')}
+                      className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+                    >
+                      Dashboard
+                    </button>
+                    <button 
+                      onClick={() => setCurrentPage('social-monitoring')}
+                      className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
+                    >
+                      <FaBell className="mr-1" />
+                      Live Monitoring
+                      {socialAlerts.filter(a => !a.is_read).length > 0 && (
+                        <span className="ml-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                          {socialAlerts.filter(a => !a.is_read).length}
+                        </span>
+                      )}
+                    </button>
+                  </>
                 )}
                 {userType === 'consumer' && (
                   <button 
