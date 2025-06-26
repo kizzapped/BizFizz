@@ -9,7 +9,7 @@ class BizFizzAPITester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(BizFizzAPITester, self).__init__(*args, **kwargs)
         # Use the local URL instead of the external one
-        self.base_url = "http://localhost:8001"
+        self.base_url = "http://0.0.0.0:8001"
         self.tests_run = 0
         self.tests_passed = 0
         
