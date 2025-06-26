@@ -76,6 +76,25 @@ YELP_API_KEY = os.environ.get('YELP_API_KEY')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_placeholder')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_placeholder')
 
+# Social Media API Keys
+TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY')
+TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET')
+TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
+TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
+TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
+
+FACEBOOK_APP_ID = os.environ.get('FACEBOOK_APP_ID')
+FACEBOOK_APP_SECRET = os.environ.get('FACEBOOK_APP_SECRET')
+
+INSTAGRAM_ACCESS_TOKEN = os.environ.get('INSTAGRAM_ACCESS_TOKEN')
+
+NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
+
+# Notification API Keys
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
 
 # Initialize OpenAI client
