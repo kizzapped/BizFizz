@@ -275,12 +275,21 @@ class BizFizzAPITester(unittest.TestCase):
                 self.assertIn("name", tier)
                 self.assertIn("price", tier)
                 self.assertIn("features", tier)
+                self.assertIn("ai_agents", tier)
                 tier_names.append(tier["name"])
             
             # Check for expected tier names
-            expected_tiers = ["Free", "Basic", "Premium"]
+            expected_tiers = ["Free", "Professional", "Enterprise"]
             for tier in expected_tiers:
-                self.assertIn(tier, tier_names)
+                self.assertIn(tier, tier_names, f"Expected tier '{tier}' not found")
+            
+            # Check for AI agents in premium tiers
+            enterprise_tier = next((t for t in data["tiers"] if t["name"] == "Enterprise"), None)
+            if enterprise_tier:
+                self.assertIn("ai_agents", enterprise_tier)
+                ai_agents = enterprise_tier["ai_agents"]
+                self.assertIn("All Agents", ai_agents)
+                self.assertIn("Intelligence Synthesizer", ai_agents)
             
             print(f"✅ Subscription tiers passed - Found {len(data['tiers'])} tiers")
             self.tests_passed += 1
