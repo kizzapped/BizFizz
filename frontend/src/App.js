@@ -116,6 +116,52 @@ function App() {
     }
   };
 
+  const fetchSocialMentions = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/social/mentions/${currentUser.id}`);
+        const data = await response.json();
+        setSocialMentions(data.mentions || []);
+      }
+    } catch (error) {
+      console.error('Error fetching social mentions:', error);
+    }
+  };
+
+  const fetchSocialAlerts = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/social/alerts/${currentUser.id}`);
+        const data = await response.json();
+        setSocialAlerts(data.alerts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching social alerts:', error);
+    }
+  };
+
+  const fetchSocialAnalytics = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/social/analytics/${currentUser.id}?days=7`);
+        const data = await response.json();
+        setSocialAnalytics(data);
+      }
+    } catch (error) {
+      console.error('Error fetching social analytics:', error);
+    }
+  };
+
+  const fetchNewsArticles = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/news/articles?keywords=restaurant,food`);
+      const data = await response.json();
+      setNewsArticles(data.articles || []);
+    } catch (error) {
+      console.error('Error fetching news articles:', error);
+    }
+  };
+
   const registerUser = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
