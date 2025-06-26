@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaChartLine, FaShieldAlt, FaBrain } from 'react-icons/fa';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ScatterChart, Scatter, AreaChart, Area } from 'recharts';
+import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaChartLine, FaShieldAlt, FaBrain, FaRocket, FaCog, FaLightbulb, FaTarget, FaTrendingUp, FaUserTie, FaIndustry, FaChartPie, FaMagic, FaGem, FaCrown } from 'react-icons/fa';
 import './App.css';
 
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7300'];
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -17,7 +17,12 @@ function App() {
   const [report, setReport] = useState(null);
   const [reports, setReports] = useState([]);
   const [subscriptionTiers, setSubscriptionTiers] = useState([]);
-  const [marketInsights, setMarketInsights] = useState(null);
+  const [marketIntelligence, setMarketIntelligence] = useState(null);
+  const [userBusiness, setUserBusiness] = useState({
+    name: '',
+    address: '',
+    business_type: 'restaurant'
+  });
 
   useEffect(() => {
     fetchSubscriptionTiers();
@@ -49,7 +54,7 @@ function App() {
     
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/search-competitors`, {
+      const response = await fetch(`${API_BASE_URL}/api/ultimate-competitor-search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,13 +62,15 @@ function App() {
         body: JSON.stringify({
           location: searchLocation,
           radius: searchRadius,
-          business_type: 'restaurant'
+          business_type: 'restaurant',
+          include_demographics: true,
+          include_social_media: true
         }),
       });
       
       const data = await response.json();
       setCompetitors(data.competitors);
-      setMarketInsights(data.market_insights);
+      setMarketIntelligence(data.market_intelligence);
       setCurrentPage('competitors');
     } catch (error) {
       console.error('Error searching competitors:', error);
@@ -72,28 +79,32 @@ function App() {
     }
   };
 
-  const generateComprehensiveReport = async () => {
+  const generateUltimateReport = async () => {
     if (selectedCompetitors.length === 0) return;
     
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/generate-comprehensive-report`, {
+      const response = await fetch(`${API_BASE_URL}/api/generate-ultimate-intelligence-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           competitor_ids: selectedCompetitors,
-          location: searchLocation
+          location: searchLocation,
+          user_business: userBusiness.name ? userBusiness : null,
+          analysis_depth: "ultimate",
+          include_predictions: true,
+          include_recommendations: true
         }),
       });
       
       const data = await response.json();
       setReport(data);
-      setCurrentPage('comprehensive-report');
+      setCurrentPage('ultimate-report');
       fetchReports();
     } catch (error) {
-      console.error('Error generating comprehensive report:', error);
+      console.error('Error generating ultimate report:', error);
     } finally {
       setLoading(false);
     }
