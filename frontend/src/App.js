@@ -1265,6 +1265,8 @@ function App() {
         return <PricingPage />;
       case 'messages':
         return <MessagesPage />;
+      case 'social-monitoring':
+        return <SocialMonitoringPage />;
       case 'competitors':
         return <div className="p-8 text-center">Competitors page (existing implementation)</div>;
       case 'ultimate-report':
