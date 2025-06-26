@@ -26,6 +26,18 @@ function App() {
   const [newMessage, setNewMessage] = useState('');
   const [websocket, setWebsocket] = useState(null);
   const [advertisements, setAdvertisements] = useState([]);
+  const [socialMentions, setSocialMentions] = useState([]);
+  const [socialAlerts, setSocialAlerts] = useState([]);
+  const [monitoringRules, setMonitoringRules] = useState([]);
+  const [socialAnalytics, setSocialAnalytics] = useState(null);
+  const [newsArticles, setNewsArticles] = useState([]);
+  const [newMonitoringRule, setNewMonitoringRule] = useState({
+    business_name: '',
+    keywords: '',
+    mentions: '',
+    hashtags: '',
+    platforms: ['twitter', 'facebook', 'news']
+  });
   const [userRegistration, setUserRegistration] = useState({
     email: '',
     password: '',
