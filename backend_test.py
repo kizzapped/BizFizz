@@ -15,6 +15,7 @@ class BizFizzAPITester(unittest.TestCase):
         self.location = "Times Square, New York"
         self.report_id = None
         self.api_integrations = {}
+        self.comprehensive_report_id = None
 
     def setUp(self):
         self.tests_run += 1
