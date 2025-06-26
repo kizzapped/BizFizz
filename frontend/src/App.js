@@ -52,9 +52,15 @@ function App() {
     fetchBusinesses();
     fetchAdvertisements();
     
-    // Initialize WebSocket for messaging
     if (currentUser) {
       initializeWebSocket();
+      fetchSocialMentions();
+      fetchSocialAlerts();
+      fetchNewsArticles();
+      
+      if (currentUser.user_type === 'business') {
+        fetchSocialAnalytics();
+      }
     }
     
     return () => {
