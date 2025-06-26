@@ -8,8 +8,8 @@ from datetime import datetime
 class BizFizzAPITester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(BizFizzAPITester, self).__init__(*args, **kwargs)
-        # Get the backend URL from the frontend .env file
-        self.base_url = "https://32969b86-898a-4616-9a3f-d03a79d2efff.preview.emergentagent.com"
+        # Use the local URL instead of the external one
+        self.base_url = "http://localhost:8001"
         self.tests_run = 0
         self.tests_passed = 0
         
