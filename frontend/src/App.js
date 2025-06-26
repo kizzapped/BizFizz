@@ -661,7 +661,7 @@ function App() {
                   <Tooltip />
                   <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#8884d8" name="Monthly Revenue ($)" />
                   <Line yAxisId="right" type="monotone" dataKey="traffic" stroke="#82ca9d" name="Daily Traffic" />
-                </BarChart>
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
