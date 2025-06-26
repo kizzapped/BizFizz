@@ -8,8 +8,8 @@ from datetime import datetime
 class BizFizzAPITester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(BizFizzAPITester, self).__init__(*args, **kwargs)
-        # Use the local URL instead of the external one
-        self.base_url = "http://0.0.0.0:8001"
+        # Use the external URL
+        self.base_url = "https://32969b86-898a-4616-9a3f-d03a79d2efff.preview.emergentagent.com"
         self.tests_run = 0
         self.tests_passed = 0
         
@@ -26,7 +26,7 @@ class BizFizzAPITester(unittest.TestCase):
         print(f"\n🔍 Testing health check endpoint...")
         
         try:
-            response = requests.get(f"{self.base_url}/api/health")
+            response = requests.get(f"{self.base_url}/api/health", timeout=10)
             self.assertEqual(response.status_code, 200)
             data = response.json()
             self.assertEqual(data["status"], "healthy")
@@ -71,7 +71,8 @@ class BizFizzAPITester(unittest.TestCase):
             
             response = requests.post(
                 f"{self.base_url}/api/social/monitoring/start",
-                json=monitoring_rule
+                json=monitoring_rule,
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
@@ -99,7 +100,8 @@ class BizFizzAPITester(unittest.TestCase):
             # Get mentions for our test business
             response = requests.get(
                 f"{self.base_url}/api/social/mentions/{self.test_business_id}",
-                params={"limit": 10}
+                params={"limit": 10},
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
@@ -126,7 +128,8 @@ class BizFizzAPITester(unittest.TestCase):
             # Get alerts for our test business
             response = requests.get(
                 f"{self.base_url}/api/social/alerts/{self.test_business_id}",
-                params={"limit": 10}
+                params={"limit": 10},
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
@@ -161,7 +164,8 @@ class BizFizzAPITester(unittest.TestCase):
             
             # Mark the alert as read
             response = requests.put(
-                f"{self.base_url}/api/social/alerts/{self.test_alert_id}/mark-read"
+                f"{self.base_url}/api/social/alerts/{self.test_alert_id}/mark-read",
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
@@ -189,7 +193,8 @@ class BizFizzAPITester(unittest.TestCase):
             # Get analytics for our test business
             response = requests.get(
                 f"{self.base_url}/api/social/analytics/{self.test_business_id}",
-                params={"days": 7}
+                params={"days": 7},
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
@@ -219,7 +224,8 @@ class BizFizzAPITester(unittest.TestCase):
             # Get news articles
             response = requests.get(
                 f"{self.base_url}/api/news/articles",
-                params={"keywords": "restaurant,food", "limit": 10}
+                params={"keywords": "restaurant,food", "limit": 10},
+                timeout=10
             )
             
             print(f"Response status: {response.status_code}")
