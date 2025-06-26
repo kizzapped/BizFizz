@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timedelta
 import os
@@ -30,6 +30,7 @@ import logging
 import schedule
 import time
 from concurrent.futures import ThreadPoolExecutor
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
 # Load environment variables
 load_dotenv()
@@ -40,9 +41,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="BizFizz Ultimate Competitive Intelligence Platform",
-    version="3.0.0",
-    description="The Most Advanced AI-Powered Business Intelligence Platform for Restaurant Owners"
+    title="BizFizz Ultimate Platform",
+    version="4.0.0",
+    description="Ultimate AI-Powered Business Intelligence & Consumer Marketplace Platform"
 )
 
 # Security
@@ -66,10 +67,12 @@ db = client.bizfizz_ultimate
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 YELP_API_KEY = os.environ.get('YELP_API_KEY')
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_placeholder')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_placeholder')
 
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
 
-# Initialize OpenAI client with proper error handling
+# Initialize OpenAI client
 openai_client = None
 if OPENAI_API_KEY:
     try:
@@ -78,1059 +81,149 @@ if OPENAI_API_KEY:
         logger.error(f"Failed to initialize OpenAI client: {str(e)}")
         openai_client = None
 
+# Initialize Stripe client
+stripe_checkout = None
+if STRIPE_SECRET_KEY and STRIPE_SECRET_KEY != 'sk_test_placeholder':
+    try:
+        stripe_checkout = StripeCheckout(api_key=STRIPE_SECRET_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Stripe client: {str(e)}")
+        stripe_checkout = None
+
 # Log API key status
-logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}")
+logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}")
+
+# WebSocket connection manager for real-time messaging
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.user_rooms: Dict[str, List[str]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+
+    async def send_personal_message(self, message: str, user_id: str):
+        if user_id in self.active_connections:
+            await self.active_connections[user_id].send_text(message)
+
+    async def broadcast_to_room(self, message: str, room_id: str):
+        if room_id in self.user_rooms:
+            for user_id in self.user_rooms[room_id]:
+                await self.send_personal_message(message, user_id)
+
+manager = ConnectionManager()
 
 # Pydantic models
-class GeographicSearch(BaseModel):
-    location: str = Field(..., description="City, zip code, or address")
-    radius: int = Field(default=5, description="Search radius in miles")
-    business_type: str = Field(default="restaurant", description="Type of business")
-    include_demographics: bool = Field(default=True, description="Include demographic analysis")
-    include_social_media: bool = Field(default=True, description="Include social media analysis")
+class UserRegistration(BaseModel):
+    email: EmailStr
+    password: str
+    user_type: str = Field(..., description="business or consumer")
+    business_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
-class UserBusiness(BaseModel):
-    name: str = Field(..., description="Business name")
-    address: str = Field(..., description="Business address")
+class UserProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: EmailStr
+    user_type: str  # business or consumer
+    business_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    subscription_tier: str = Field(default="starter")
+    subscription_status: str = Field(default="active")
+    credits: int = Field(default=10)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    profile_image: Optional[str] = None
+    preferences: Dict[str, Any] = Field(default_factory=dict)
+
+class BusinessProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    business_name: str
     business_type: str = Field(default="restaurant")
-    target_demographics: Optional[List[str]] = None
-    current_pricing: Optional[Dict[str, float]] = None
-    goals: Optional[List[str]] = None
+    address: str
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    description: Optional[str] = None
+    hours: Optional[Dict[str, str]] = None
+    amenities: List[str] = Field(default_factory=list)
+    photos: List[str] = Field(default_factory=list)
+    menu_items: List[Dict[str, Any]] = Field(default_factory=list)
+    is_verified: bool = Field(default=False)
+    advertising_budget: float = Field(default=0.0)
+    advertising_active: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class CompetitiveAnalysisRequest(BaseModel):
-    competitor_ids: List[str]
-    location: str
-    user_business: Optional[UserBusiness] = None
-    analysis_depth: str = Field(default="comprehensive", description="basic, standard, comprehensive, enterprise")
-    include_predictions: bool = Field(default=True)
-    include_recommendations: bool = Field(default=True)
+class ConsumerReview(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    business_id: str
+    rating: float = Field(..., ge=1, le=5)
+    review_text: Optional[str] = None
+    photos: List[str] = Field(default_factory=list)
+    visit_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    helpful_votes: int = Field(default=0)
+    verified_visit: bool = Field(default=False)
 
-# Advanced Data Collection Functions
-def collect_comprehensive_business_data(business_data, location):
-    """Collect comprehensive business intelligence data"""
-    try:
-        enhanced_data = business_data.copy()
-        
-        # Calculate advanced metrics
-        rating = enhanced_data.get('rating', 0)
-        review_count = enhanced_data.get('review_count', 0)
-        price_level = enhanced_data.get('price_level', 1)
-        
-        # Advanced business intelligence calculations
-        market_penetration = min(100, (review_count / 1000) * 100)
-        customer_loyalty = min(100, (rating - 3) * 50) if rating >= 3 else 0
-        digital_presence_score = calculate_digital_presence_score(enhanced_data)
-        competitive_threat_level = calculate_threat_level(enhanced_data)
-        
-        # Estimated financial metrics
-        estimated_seats = estimate_restaurant_capacity(enhanced_data)
-        estimated_daily_covers = estimate_daily_covers(enhanced_data, estimated_seats)
-        estimated_avg_check = price_level * 25 + (rating - 3) * 10
-        estimated_monthly_revenue = estimated_daily_covers * estimated_avg_check * 30
-        
-        # Customer demographics estimation
-        demographics = estimate_customer_demographics(enhanced_data, location)
-        
-        # Operational metrics
-        operational_efficiency = calculate_operational_efficiency(enhanced_data)
-        service_quality_score = rating * 20
-        
-        # Market positioning
-        market_position = determine_market_position(enhanced_data, price_level, rating)
-        
-        # Growth potential analysis
-        growth_potential = analyze_growth_potential(enhanced_data, market_penetration, customer_loyalty)
-        
-        enhanced_data.update({
-            "advanced_metrics": {
-                "market_penetration_score": market_penetration,
-                "customer_loyalty_index": customer_loyalty,
-                "digital_presence_score": digital_presence_score,
-                "competitive_threat_level": competitive_threat_level,
-                "estimated_seats": estimated_seats,
-                "estimated_daily_covers": estimated_daily_covers,
-                "estimated_avg_check": estimated_avg_check,
-                "estimated_monthly_revenue": estimated_monthly_revenue,
-                "operational_efficiency": operational_efficiency,
-                "service_quality_score": service_quality_score,
-                "growth_potential": growth_potential
-            },
-            "customer_demographics": demographics,
-            "market_positioning": market_position,
-            "peak_performance_indicators": calculate_peak_indicators(enhanced_data),
-            "competitive_advantages": identify_competitive_advantages(enhanced_data),
-            "risk_factors": identify_risk_factors(enhanced_data),
-            "expansion_opportunities": identify_expansion_opportunities(enhanced_data, location)
-        })
-        
-        return enhanced_data
-        
-    except Exception as e:
-        logger.error(f"Error collecting comprehensive business data: {str(e)}")
-        return business_data
+class Message(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    sender_id: str
+    recipient_id: str
+    message_type: str = Field(default="text")  # text, recommendation, business_inquiry
+    content: str
+    business_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    read_at: Optional[datetime] = None
 
-def calculate_digital_presence_score(business_data):
-    """Calculate digital presence and marketing strength"""
-    score = 0
-    
-    # Base score from reviews
-    review_count = business_data.get('review_count', 0)
-    score += min(50, review_count / 20)
-    
-    # Website presence
-    if business_data.get('website'):
-        score += 20
-    
-    # Rating contribution
-    rating = business_data.get('rating', 0)
-    if rating >= 4.0:
-        score += 20
-    elif rating >= 3.5:
-        score += 10
-    
-    # Categories diversity (indicates market reach)
-    categories = business_data.get('categories', [])
-    score += min(10, len(categories) * 2)
-    
-    return min(100, score)
+class BusinessAdvertisement(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_id: str
+    user_id: str
+    ad_type: str = Field(..., description="banner, featured, sponsored_post")
+    title: str
+    description: str
+    image_url: Optional[str] = None
+    target_demographics: List[str] = Field(default_factory=list)
+    budget_amount: float
+    duration_days: int
+    clicks: int = Field(default=0)
+    impressions: int = Field(default=0)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime
 
-def calculate_threat_level(business_data):
-    """Calculate competitive threat level"""
-    rating = business_data.get('rating', 0)
-    review_count = business_data.get('review_count', 0)
-    price_level = business_data.get('price_level', 1)
-    
-    threat_score = 0
-    
-    # High rating = higher threat
-    if rating >= 4.5:
-        threat_score += 40
-    elif rating >= 4.0:
-        threat_score += 30
-    elif rating >= 3.5:
-        threat_score += 20
-    
-    # High review count = higher threat
-    if review_count >= 1000:
-        threat_score += 30
-    elif review_count >= 500:
-        threat_score += 20
-    elif review_count >= 100:
-        threat_score += 10
-    
-    # Premium pricing with high rating = significant threat
-    if price_level >= 3 and rating >= 4.0:
-        threat_score += 20
-    
-    if threat_score >= 70:
-        return "High"
-    elif threat_score >= 40:
-        return "Medium"
-    else:
-        return "Low"
+class PaymentTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    transaction_type: str  # subscription, advertisement, credits
+    amount: float
+    currency: str = Field(default="usd")
+    stripe_session_id: Optional[str] = None
+    payment_status: str = Field(default="pending")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
 
-def estimate_restaurant_capacity(business_data):
-    """Estimate restaurant seating capacity"""
-    base_capacity = 50  # Default assumption
-    
-    price_level = business_data.get('price_level', 1)
-    categories = business_data.get('categories', [])
-    
-    # Adjust based on restaurant type
-    if any(cat in ['Fine Dining', 'Steakhouses'] for cat in categories):
-        base_capacity = max(40, base_capacity - 10)  # Fine dining usually smaller
-    elif any(cat in ['Fast Food', 'Pizza'] for cat in categories):
-        base_capacity = max(30, base_capacity + 20)  # Fast food usually larger
-    elif any(cat in ['Cafes', 'Coffee'] for cat in categories):
-        base_capacity = max(20, base_capacity - 20)  # Cafes usually smaller
-    
-    # Adjust based on price level
-    if price_level == 4:
-        base_capacity = max(30, base_capacity - 15)  # Premium places often smaller
-    elif price_level == 1:
-        base_capacity += 25  # Budget places often larger
-    
-    return base_capacity
+# Subscription packages
+SUBSCRIPTION_PACKAGES = {
+    "starter": {"price": 0.0, "credits": 10, "features": ["Basic reports", "5 competitors", "Email support"]},
+    "professional": {"price": 149.0, "credits": 500, "features": ["Unlimited reports", "25 competitors", "Advanced analytics", "Priority support"]},
+    "enterprise": {"price": 399.0, "credits": 2000, "features": ["Enterprise features", "Unlimited competitors", "Custom integrations", "Dedicated support"]}
+}
 
-def estimate_daily_covers(business_data, estimated_seats):
-    """Estimate daily customer covers"""
-    rating = business_data.get('rating', 3.5)
-    price_level = business_data.get('price_level', 2)
-    
-    # Base turnover rate (customers per seat per day)
-    base_turnover = 2.5
-    
-    # Adjust based on rating (higher rating = more customers)
-    if rating >= 4.5:
-        base_turnover *= 1.4
-    elif rating >= 4.0:
-        base_turnover *= 1.2
-    elif rating >= 3.5:
-        base_turnover *= 1.0
-    else:
-        base_turnover *= 0.8
-    
-    # Adjust based on price level (lower price = higher volume)
-    if price_level == 1:
-        base_turnover *= 1.3
-    elif price_level == 4:
-        base_turnover *= 0.7
-    
-    return int(estimated_seats * base_turnover)
+ADVERTISING_PACKAGES = {
+    "basic": {"price": 29.0, "duration_days": 7, "features": ["Basic listing highlight", "1000 impressions"]},
+    "featured": {"price": 99.0, "duration_days": 30, "features": ["Featured placement", "5000 impressions", "Analytics dashboard"]},
+    "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
+}
 
-def estimate_customer_demographics(business_data, location):
-    """Estimate customer demographics based on business type and location"""
-    categories = business_data.get('categories', [])
-    price_level = business_data.get('price_level', 2)
-    
-    demographics = {
-        "age_groups": {},
-        "income_levels": {},
-        "dining_preferences": {},
-        "visit_frequency": {},
-        "party_size_distribution": {}
-    }
-    
-    # Age group estimation based on restaurant type
-    if any(cat in ['Fast Food', 'Pizza'] for cat in categories):
-        demographics["age_groups"] = {"18-25": 30, "26-35": 25, "36-50": 25, "51+": 20}
-    elif any(cat in ['Fine Dining', 'Steakhouses'] for cat in categories):
-        demographics["age_groups"] = {"18-25": 10, "26-35": 25, "36-50": 35, "51+": 30}
-    elif any(cat in ['Cafes', 'Coffee'] for cat in categories):
-        demographics["age_groups"] = {"18-25": 35, "26-35": 30, "36-50": 20, "51+": 15}
-    else:
-        demographics["age_groups"] = {"18-25": 20, "26-35": 30, "36-50": 30, "51+": 20}
-    
-    # Income level based on price level
-    if price_level == 1:
-        demographics["income_levels"] = {"Low": 40, "Middle": 45, "High": 15}
-    elif price_level == 2:
-        demographics["income_levels"] = {"Low": 25, "Middle": 50, "High": 25}
-    elif price_level == 3:
-        demographics["income_levels"] = {"Low": 15, "Middle": 40, "High": 45}
-    else:
-        demographics["income_levels"] = {"Low": 5, "Middle": 25, "High": 70}
-    
-    return demographics
-
-def calculate_operational_efficiency(business_data):
-    """Calculate operational efficiency score"""
-    rating = business_data.get('rating', 0)
-    review_count = business_data.get('review_count', 0)
-    
-    # Higher rating with more reviews indicates consistent operation
-    efficiency = (rating - 2) * 25  # Base efficiency from rating
-    
-    # Consistency bonus (more reviews with high rating = consistent operation)
-    if rating >= 4.0 and review_count >= 100:
-        efficiency += 20
-    elif rating >= 3.5 and review_count >= 50:
-        efficiency += 10
-    
-    return max(0, min(100, efficiency))
-
-def determine_market_position(business_data, price_level, rating):
-    """Determine market positioning strategy"""
-    if price_level >= 3 and rating >= 4.0:
-        return {
-            "position": "Premium Leader",
-            "strategy": "High-quality, premium pricing",
-            "target_market": "Affluent customers seeking quality"
-        }
-    elif price_level <= 2 and rating >= 4.0:
-        return {
-            "position": "Value Champion",
-            "strategy": "High quality at competitive prices",
-            "target_market": "Value-conscious quality seekers"
-        }
-    elif price_level >= 3 and rating < 4.0:
-        return {
-            "position": "Premium Challenger",
-            "strategy": "Premium pricing with improvement needed",
-            "target_market": "Premium market with execution gaps"
-        }
-    else:
-        return {
-            "position": "Market Participant",
-            "strategy": "Standard market offering",
-            "target_market": "General market"
-        }
-
-def analyze_growth_potential(business_data, market_penetration, customer_loyalty):
-    """Analyze growth potential"""
-    rating = business_data.get('rating', 0)
-    review_count = business_data.get('review_count', 0)
-    
-    potential_score = 0
-    
-    # High rating with low penetration = high growth potential
-    if rating >= 4.0 and market_penetration < 50:
-        potential_score += 40
-    
-    # Consistent quality (loyalty) indicates scalability
-    if customer_loyalty >= 60:
-        potential_score += 30
-    
-    # Room for review growth
-    if review_count < 500 and rating >= 4.0:
-        potential_score += 20
-    
-    # Location factors (simplified)
-    potential_score += 10  # Base location opportunity
-    
-    if potential_score >= 70:
-        return "High"
-    elif potential_score >= 40:
-        return "Medium"
-    else:
-        return "Low"
-
-def calculate_peak_indicators(business_data):
-    """Calculate peak performance indicators"""
-    rating = business_data.get('rating', 0)
-    review_count = business_data.get('review_count', 0)
-    
-    return {
-        "peak_rating_potential": min(5.0, rating + 0.3),
-        "review_growth_potential": int(review_count * 1.5),
-        "market_share_potential": "3-7% local market share",
-        "revenue_growth_potential": "15-30% annually"
-    }
-
-def identify_competitive_advantages(business_data):
-    """Identify key competitive advantages"""
-    advantages = []
-    
-    rating = business_data.get('rating', 0)
-    categories = business_data.get('categories', [])
-    price_level = business_data.get('price_level', 1)
-    
-    if rating >= 4.5:
-        advantages.append("Exceptional customer satisfaction")
-    
-    if len(categories) >= 3:
-        advantages.append("Diverse menu and market appeal")
-    
-    if price_level <= 2 and rating >= 4.0:
-        advantages.append("Superior value proposition")
-    
-    if 'Delivery' in str(categories):
-        advantages.append("Strong delivery capabilities")
-    
-    if not advantages:
-        advantages.append("Established market presence")
-    
-    return advantages
-
-def identify_risk_factors(business_data):
-    """Identify potential risk factors"""
-    risks = []
-    
-    rating = business_data.get('rating', 0)
-    review_count = business_data.get('review_count', 0)
-    
-    if rating < 3.5:
-        risks.append("Below-average customer satisfaction")
-    
-    if review_count < 50:
-        risks.append("Limited customer feedback and visibility")
-    
-    if rating >= 4.0 and review_count < 100:
-        risks.append("Good quality but limited market penetration")
-    
-    if not risks:
-        risks.append("Standard market risks")
-    
-    return risks
-
-def identify_expansion_opportunities(business_data, location):
-    """Identify expansion and growth opportunities"""
-    opportunities = []
-    
-    rating = business_data.get('rating', 0)
-    categories = business_data.get('categories', [])
-    
-    if rating >= 4.0:
-        opportunities.append("Franchise or additional location potential")
-    
-    if 'Delivery' not in str(categories):
-        opportunities.append("Delivery service expansion")
-    
-    if 'Catering' not in str(categories):
-        opportunities.append("Catering service addition")
-    
-    opportunities.append("Social media marketing enhancement")
-    opportunities.append("Customer loyalty program implementation")
-    
-    return opportunities
-
-# Core AI Agents (from previous implementation)
-def pricewatch_agent_analysis(competitors, location):
-    """PriceWatch Agent - Advanced pricing strategy analysis"""
-    if not openai_client:
-        return generate_mock_pricing_analysis(competitors, location)
-    
-    try:
-        price_data = []
-        total_revenue = 0
-        price_levels = []
-        
-        for comp in competitors:
-            price_level = comp.get('price_level', 1)
-            avg_check = comp.get('advanced_metrics', {}).get('estimated_avg_check', 25)
-            revenue = comp.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0)
-            
-            price_data.append(f"- {comp['name']}: {'$' * price_level} (${avg_check} avg check, ${revenue:,.0f} est. monthly revenue)")
-            total_revenue += revenue
-            price_levels.append(price_level)
-        
-        avg_price_level = sum(price_levels) / len(price_levels) if price_levels else 2
-        
-        prompt = f"""
-        As an expert PriceWatch AI agent analyzing restaurant pricing in {location}:
-        
-        Market Data:
-        {chr(10).join(price_data)}
-        
-        Provide comprehensive pricing analysis in JSON format:
-        {{
-            "market_overview": "Detailed market pricing analysis",
-            "pricing_opportunities": ["specific opportunity 1", "specific opportunity 2", "specific opportunity 3"],
-            "competitive_gaps": ["gap analysis 1", "gap analysis 2"],
-            "pricing_strategies": ["strategy recommendation 1", "strategy recommendation 2"],
-            "revenue_benchmarks": "Revenue benchmarking insights"
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=600,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"PriceWatch agent error: {str(e)}")
-        return generate_mock_pricing_analysis(competitors, location)
-
-def sentiment_agent_analysis(competitors, location):
-    """Sentiment Agent - Advanced customer sentiment analysis"""
-    if not openai_client:
-        return generate_mock_sentiment_analysis(competitors, location)
-    
-    try:
-        sentiment_data = []
-        total_reviews = 0
-        avg_rating = 0
-        
-        for comp in competitors:
-            rating = comp.get('rating', 0)
-            review_count = comp.get('review_count', 0)
-            
-            sentiment_data.append(f"- {comp['name']}: {rating}/5 stars, {review_count} reviews")
-            total_reviews += review_count
-            avg_rating += rating
-        
-        avg_rating = avg_rating / len(competitors) if competitors else 0
-        
-        prompt = f"""
-        As an expert Sentiment Analysis AI agent for restaurants in {location}:
-        
-        Customer Feedback Data:
-        {chr(10).join(sentiment_data)}
-        
-        Provide comprehensive sentiment analysis in JSON format:
-        {{
-            "sentiment_overview": "Overall market sentiment analysis",
-            "customer_pain_points": ["pain point 1", "pain point 2", "pain point 3"],
-            "satisfaction_drivers": ["driver 1", "driver 2", "driver 3"],
-            "service_gaps": ["gap 1", "gap 2"],
-            "reputation_insights": "Reputation management insights"
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=600,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"Sentiment agent error: {str(e)}")
-        return generate_mock_sentiment_analysis(competitors, location)
-
-def crowdanalyst_agent_analysis(competitors, location):
-    """CrowdAnalyst Agent - Advanced foot traffic and customer behavior analysis"""
-    try:
-        traffic_data = []
-        total_traffic = 0
-        total_revenue = 0
-        
-        for comp in competitors:
-            daily_traffic = comp.get('advanced_metrics', {}).get('estimated_daily_covers', 50)
-            revenue = comp.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0)
-            
-            traffic_data.append(f"- {comp['name']}: ~{daily_traffic} daily customers")
-            total_traffic += daily_traffic
-            total_revenue += revenue
-        
-        avg_traffic = total_traffic / len(competitors) if competitors else 0
-        
-        return {
-            "market_capacity": {
-                "total_daily_customers": int(total_traffic),
-                "average_per_restaurant": int(avg_traffic),
-                "market_saturation": f"{min(100, len(competitors) * 5)}%",
-                "revenue_per_customer": f"${(total_revenue / 30) / total_traffic:.0f}" if total_traffic > 0 else "$25"
-            },
-            "traffic_patterns": {
-                "peak_hours": ["11:30 AM - 1:30 PM (Lunch)", "6:00 PM - 8:30 PM (Dinner)"],
-                "seasonal_trends": ["Summer outdoor dining surge", "Holiday season peaks"],
-                "customer_flow": f"Market serves {int(total_traffic * 30):,} customers monthly"
-            },
-            "behavior_insights": {
-                "average_visit_duration": "45-75 minutes",
-                "party_size": "2.3 people average",
-                "repeat_visit_rate": "25-35%"
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"CrowdAnalyst agent error: {str(e)}")
-        return generate_mock_traffic_analysis()
-
-def sentinel_agent_analysis(competitors, location):
-    """Sentinel Agent - Advanced competitive monitoring and threat analysis"""
-    if not openai_client:
-        return generate_mock_sentinel_analysis(competitors, location)
-    
-    try:
-        competitive_data = []
-        threat_levels = []
-        
-        for comp in competitors:
-            threat = comp.get('advanced_metrics', {}).get('competitive_threat_level', 'Medium')
-            market_strength = comp.get('advanced_metrics', {}).get('competitive_strength', 50)
-            
-            competitive_data.append(f"- {comp['name']}: {threat} threat, {market_strength:.0f}/100 market strength")
-            threat_levels.append(threat)
-        
-        high_threat_count = sum(1 for t in threat_levels if t == 'High')
-        
-        prompt = f"""
-        As an expert Sentinel AI agent monitoring competitive landscape in {location}:
-        
-        Competitive Intelligence:
-        {chr(10).join(competitive_data)}
-        
-        Provide comprehensive competitive monitoring analysis in JSON format:
-        {{
-            "threat_assessment": "Overall competitive threat analysis",
-            "emerging_trends": ["trend 1", "trend 2", "trend 3"],
-            "competitive_moves": ["recent move 1", "recent move 2"],
-            "strategic_recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=600,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"Sentinel agent error: {str(e)}")
-        return generate_mock_sentinel_analysis(competitors, location)
-
-def generate_mock_pricing_analysis(competitors, location):
-    return {
-        "market_overview": f"Pricing in {location} ranges from budget ($) to premium ($$$$) with strong mid-range presence",
-        "pricing_opportunities": [
-            "Gap in premium casual dining ($25-35 range)",
-            "Limited early bird pricing strategies observed",
-            "Opportunity for dynamic weekend pricing"
-        ],
-        "competitive_gaps": [
-            "Few competitors offer value lunch pricing",
-            "Premium brunch market underserved"
-        ],
-        "pricing_strategies": [
-            "Consider tiered pricing for different meal periods",
-            "Implement loyalty program with pricing benefits"
-        ],
-        "revenue_benchmarks": "Top performers achieve $15,000-30,000 monthly revenue per location"
-    }
-
-def generate_mock_sentiment_analysis(competitors, location):
-    return {
-        "sentiment_overview": f"Overall positive sentiment in {location} with high expectations for service quality",
-        "customer_pain_points": [
-            "Wait times during peak hours",
-            "Parking availability concerns",
-            "Inconsistent service quality"
-        ],
-        "satisfaction_drivers": [
-            "Fresh, quality ingredients",
-            "Attentive staff service",
-            "Comfortable atmosphere"
-        ],
-        "service_gaps": [
-            "Limited vegetarian/vegan options",
-            "Inconsistent WiFi availability"
-        ],
-        "reputation_insights": "Strong correlation between staff training and customer satisfaction scores"
-    }
-
-def generate_mock_traffic_analysis():
-    return {
-        "market_capacity": {
-            "total_daily_customers": 2500,
-            "average_per_restaurant": 125,
-            "market_saturation": "75%",
-            "revenue_per_customer": "$32"
-        },
-        "traffic_patterns": {
-            "peak_hours": ["11:30 AM - 1:30 PM", "6:00 PM - 8:30 PM"],
-            "seasonal_trends": ["Summer outdoor dining surge", "Holiday season peaks"],
-            "customer_flow": "Market serves 75,000 customers monthly"
-        },
-        "behavior_insights": {
-            "average_visit_duration": "45-75 minutes",
-            "party_size": "2.3 people average",
-            "repeat_visit_rate": "30%"
-        }
-    }
-
-def generate_mock_sentinel_analysis(competitors, location):
-    return {
-        "threat_assessment": f"Moderate to high competitive pressure in {location} with established players",
-        "emerging_trends": [
-            "Increased focus on sustainable practices",
-            "Technology adoption for ordering and payments",
-            "Social media marketing intensification"
-        ],
-        "competitive_moves": [
-            "Menu diversification to include health-conscious options",
-            "Enhanced delivery and takeout services"
-        ],
-        "strategic_recommendations": [
-            "Differentiate through unique dining experience",
-            "Invest in technology integration",
-            "Build strong local community relationships"
-        ]
-    }
-
-# Advanced AI Agents
-def menuminer_agent_analysis(competitors, location):
-    """MenuMiner Agent - Advanced menu and pricing analysis"""
-    if not openai_client:
-        return generate_mock_menu_analysis(competitors, location)
-    
-    try:
-        menu_data = []
-        pricing_insights = []
-        
-        for comp in competitors:
-            categories = comp.get('categories', [])
-            price_level = comp.get('price_level', 1)
-            avg_check = comp.get('advanced_metrics', {}).get('estimated_avg_check', 25)
-            
-            menu_info = f"- {comp['name']}: {', '.join(categories)} | Price level: {'$' * price_level} | Avg check: ${avg_check}"
-            menu_data.append(menu_info)
-            
-            pricing_insights.append({
-                "restaurant": comp['name'],
-                "categories": categories,
-                "price_level": price_level,
-                "avg_check": avg_check
-            })
-        
-        menu_text = "\n".join(menu_data)
-        
-        prompt = f"""
-        As a MenuMiner AI agent analyzing restaurant menus and pricing in {location}:
-        
-        Menu & Pricing Data:
-        {menu_text}
-        
-        Provide comprehensive menu analysis in JSON format:
-        {{
-            "menu_positioning_analysis": "Analysis of menu positioning strategies",
-            "pricing_optimization_opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
-            "menu_gap_analysis": ["gap 1", "gap 2"],
-            "recommended_menu_items": ["item 1", "item 2", "item 3"],
-            "pricing_strategy_recommendations": ["strategy 1", "strategy 2"],
-            "category_performance_insights": "Insights on category performance",
-            "seasonal_menu_opportunities": ["seasonal opportunity 1", "seasonal opportunity 2"]
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"MenuMiner agent error: {str(e)}")
-        return generate_mock_menu_analysis(competitors, location)
-
-def socialsentinel_agent_analysis(competitors, location):
-    """SocialSentinel Agent - Social media and online presence analysis"""
-    if not openai_client:
-        return generate_mock_social_analysis(competitors, location)
-    
-    try:
-        social_data = []
-        
-        for comp in competitors:
-            digital_score = comp.get('advanced_metrics', {}).get('digital_presence_score', 50)
-            review_count = comp.get('review_count', 0)
-            rating = comp.get('rating', 0)
-            
-            social_info = f"- {comp['name']}: Digital score {digital_score}/100, {review_count} reviews, {rating}★ rating"
-            social_data.append(social_info)
-        
-        social_text = "\n".join(social_data)
-        
-        prompt = f"""
-        As a SocialSentinel AI agent analyzing social media presence in {location}:
-        
-        Digital Presence Data:
-        {social_text}
-        
-        Provide social media analysis in JSON format:
-        {{
-            "social_media_landscape": "Overview of social media landscape",
-            "digital_marketing_opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
-            "content_strategy_recommendations": ["strategy 1", "strategy 2"],
-            "influencer_collaboration_potential": "Assessment of influencer opportunities",
-            "online_reputation_insights": "Online reputation analysis",
-            "social_media_trends": ["trend 1", "trend 2", "trend 3"],
-            "engagement_optimization_tips": ["tip 1", "tip 2"]
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"SocialSentinel agent error: {str(e)}")
-        return generate_mock_social_analysis(competitors, location)
-
-def locationscout_agent_analysis(competitors, location):
-    """LocationScout Agent - Geographic and demographic analysis"""
-    try:
-        demographic_data = []
-        location_insights = []
-        
-        for comp in competitors:
-            demographics = comp.get('customer_demographics', {})
-            positioning = comp.get('market_positioning', {})
-            
-            demo_info = f"- {comp['name']}: {positioning.get('position', 'Market Participant')}"
-            demographic_data.append(demo_info)
-        
-        # Aggregate demographic analysis
-        total_competitors = len(competitors)
-        avg_rating = sum(comp.get('rating', 0) for comp in competitors) / total_competitors if total_competitors > 0 else 0
-        
-        return {
-            "location_analysis": {
-                "market_density": "High" if total_competitors > 15 else "Medium" if total_competitors > 8 else "Low",
-                "average_market_rating": round(avg_rating, 1),
-                "total_competitors": total_competitors,
-                "market_saturation_level": f"{min(100, total_competitors * 5)}%"
-            },
-            "demographic_insights": {
-                "primary_demographics": "Mixed age groups with varying income levels",
-                "target_market_opportunities": [
-                    "Young professionals (25-35)",
-                    "Families with children",
-                    "Senior dining market"
-                ],
-                "income_distribution": "Moderate to high disposable income",
-                "dining_behavior_patterns": [
-                    "Weekend dining surge",
-                    "Lunch hour concentration",
-                    "Delivery/takeout preference growth"
-                ]
-            },
-            "location_advantages": [
-                f"Established dining destination in {location}",
-                "High foot traffic area",
-                "Diverse customer base"
-            ],
-            "location_challenges": [
-                "High competition density",
-                "Parking considerations",
-                "Rent/operational costs"
-            ],
-            "expansion_zones": [
-                "Underserved neighboring areas",
-                "Emerging residential districts",
-                "Business district opportunities"
-            ]
-        }
-        
-    except Exception as e:
-        logger.error(f"LocationScout agent error: {str(e)}")
-        return generate_mock_location_analysis(location)
-
-def trendanalyzer_agent_analysis(competitors, location):
-    """TrendAnalyzer Agent - Market trends and predictive analysis"""
-    if not openai_client:
-        return generate_mock_trend_analysis(competitors, location)
-    
-    try:
-        trend_data = []
-        
-        for comp in competitors:
-            categories = comp.get('categories', [])
-            growth_potential = comp.get('advanced_metrics', {}).get('growth_potential', 'Medium')
-            
-            trend_info = f"- {comp['name']}: {', '.join(categories[:2])}, Growth: {growth_potential}"
-            trend_data.append(trend_info)
-        
-        trend_text = "\n".join(trend_data)
-        
-        prompt = f"""
-        As a TrendAnalyzer AI agent analyzing market trends in {location} restaurant industry:
-        
-        Competitor Trend Data:
-        {trend_text}
-        
-        Provide trend analysis in JSON format:
-        {{
-            "emerging_market_trends": ["trend 1", "trend 2", "trend 3"],
-            "seasonal_patterns": ["pattern 1", "pattern 2"],
-            "consumer_behavior_shifts": ["shift 1", "shift 2", "shift 3"],
-            "technology_adoption_trends": ["tech trend 1", "tech trend 2"],
-            "market_growth_predictions": "Predictions for next 12-24 months",
-            "disruptive_factors": ["factor 1", "factor 2"],
-            "investment_opportunities": ["opportunity 1", "opportunity 2"],
-            "risk_mitigation_strategies": ["strategy 1", "strategy 2"]
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"TrendAnalyzer agent error: {str(e)}")
-        return generate_mock_trend_analysis(competitors, location)
-
-def customerjourney_agent_analysis(competitors, location, user_business=None):
-    """CustomerJourney Agent - Customer experience and journey analysis"""
-    if not openai_client:
-        return generate_mock_journey_analysis(competitors, location)
-    
-    try:
-        journey_data = []
-        
-        for comp in competitors:
-            rating = comp.get('rating', 0)
-            efficiency = comp.get('advanced_metrics', {}).get('operational_efficiency', 50)
-            service_score = comp.get('advanced_metrics', {}).get('service_quality_score', 70)
-            
-            journey_info = f"- {comp['name']}: {rating}★ rating, {efficiency}% operational efficiency, {service_score}% service quality"
-            journey_data.append(journey_info)
-        
-        journey_text = "\n".join(journey_data)
-        user_context = f"\nUser Business Context: {user_business.name if user_business else 'Not specified'}"
-        
-        prompt = f"""
-        As a CustomerJourney AI agent analyzing customer experience in {location}:
-        
-        Customer Experience Data:
-        {journey_text}
-        {user_context}
-        
-        Provide customer journey analysis in JSON format:
-        {{
-            "customer_experience_benchmarks": "Analysis of customer experience standards",
-            "journey_optimization_opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
-            "service_quality_insights": ["insight 1", "insight 2"],
-            "customer_satisfaction_drivers": ["driver 1", "driver 2", "driver 3"],
-            "pain_point_analysis": ["pain point 1", "pain point 2"],
-            "loyalty_building_strategies": ["strategy 1", "strategy 2"],
-            "customer_retention_recommendations": ["recommendation 1", "recommendation 2"],
-            "experience_differentiation_opportunities": ["opportunity 1", "opportunity 2"]
-        }}
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
-    except Exception as e:
-        logger.error(f"CustomerJourney agent error: {str(e)}")
-        return generate_mock_journey_analysis(competitors, location)
-
-# Mock data generators for fallback
-def generate_mock_menu_analysis(competitors, location):
-    return {
-        "menu_positioning_analysis": f"Menu positioning in {location} shows diverse strategies from fast-casual to premium dining",
-        "pricing_optimization_opportunities": [
-            "Gap in mid-premium pricing tier ($25-35 range)",
-            "Limited healthy/vegan options at competitive prices",
-            "Opportunity for value lunch pricing"
-        ],
-        "menu_gap_analysis": [
-            "Underserved dietary restrictions market",
-            "Limited late-night dining options"
-        ],
-        "recommended_menu_items": [
-            "Signature bowls/customizable options",
-            "Premium comfort food items",
-            "Healthy fast-casual alternatives"
-        ],
-        "pricing_strategy_recommendations": [
-            "Implement dynamic pricing for peak hours",
-            "Create value meal combinations"
-        ],
-        "category_performance_insights": "Italian and Asian cuisines showing strong performance with consistent pricing power",
-        "seasonal_menu_opportunities": [
-            "Summer outdoor dining specials",
-            "Holiday catering packages"
-        ]
-    }
-
-def generate_mock_social_analysis(competitors, location):
-    return {
-        "social_media_landscape": f"Social media presence in {location} is highly competitive with Instagram and Facebook leading engagement",
-        "digital_marketing_opportunities": [
-            "Food photography and visual storytelling",
-            "Local community engagement campaigns",
-            "User-generated content initiatives"
-        ],
-        "content_strategy_recommendations": [
-            "Behind-the-scenes kitchen content",
-            "Customer story highlighting"
-        ],
-        "influencer_collaboration_potential": "High potential for micro-influencer partnerships with local food bloggers",
-        "online_reputation_insights": "Online reputation management critical due to high competition",
-        "social_media_trends": [
-            "Video content dominance",
-            "Sustainable dining messaging",
-            "Community involvement showcasing"
-        ],
-        "engagement_optimization_tips": [
-            "Respond to all customer interactions within 2 hours",
-            "Share customer photos and testimonials"
-        ]
-    }
-
-def generate_mock_location_analysis(location):
-    return {
-        "location_analysis": {
-            "market_density": "High",
-            "average_market_rating": 4.2,
-            "total_competitors": 15,
-            "market_saturation_level": "75%"
-        },
-        "demographic_insights": {
-            "primary_demographics": "Mixed age groups with varying income levels",
-            "target_market_opportunities": [
-                "Young professionals (25-35)",
-                "Families with children",
-                "Senior dining market"
-            ],
-            "income_distribution": "Moderate to high disposable income",
-            "dining_behavior_patterns": [
-                "Weekend dining surge",
-                "Lunch hour concentration",
-                "Delivery preference growth"
-            ]
-        }
-    }
-
-def generate_mock_trend_analysis(competitors, location):
-    return {
-        "emerging_market_trends": [
-            "Plant-based menu expansion",
-            "Technology-enhanced dining experiences",
-            "Sustainability focus in operations"
-        ],
-        "seasonal_patterns": [
-            "Summer outdoor dining surge",
-            "Holiday catering demand spikes"
-        ],
-        "consumer_behavior_shifts": [
-            "Increased delivery/takeout preference",
-            "Value-conscious dining decisions",
-            "Experience-focused dining choices"
-        ],
-        "technology_adoption_trends": [
-            "QR code menu adoption",
-            "Online ordering system integration"
-        ],
-        "market_growth_predictions": "Steady 3-5% growth expected over next 12 months with premium casual segment leading",
-        "disruptive_factors": [
-            "Economic uncertainty affecting dining budgets",
-            "Labor shortage impacting service quality"
-        ]
-    }
-
-def generate_mock_journey_analysis(competitors, location):
-    return {
-        "customer_experience_benchmarks": "Customer experience standards in area emphasize speed, quality, and personalized service",
-        "journey_optimization_opportunities": [
-            "Streamline ordering and payment processes",
-            "Enhance wait time communication",
-            "Improve reservation and seating management"
-        ],
-        "service_quality_insights": [
-            "Consistent service quality key differentiator",
-            "Staff training investment shows in customer satisfaction"
-        ],
-        "customer_satisfaction_drivers": [
-            "Food quality and consistency",
-            "Staff friendliness and knowledge",
-            "Atmosphere and ambiance"
-        ],
-        "pain_point_analysis": [
-            "Long wait times during peak hours",
-            "Parking availability challenges"
-        ]
-    }
-
-# Enhanced Yelp Business Search
+# Enhanced Yelp Business Search (from previous implementation)
 def search_yelp_businesses_advanced(location, radius, business_type="restaurant"):
     """Enhanced Yelp search with comprehensive data collection"""
     if not YELP_API_KEY:
@@ -1145,7 +238,7 @@ def search_yelp_businesses_advanced(location, radius, business_type="restaurant"
             'location': location,
             'radius': int(radius * 1609.34),
             'categories': 'restaurants',
-            'limit': 50,  # Increased limit for comprehensive analysis
+            'limit': 50,
             'sort_by': 'rating'
         }
         
@@ -1160,7 +253,6 @@ def search_yelp_businesses_advanced(location, radius, business_type="restaurant"
             competitors = []
             
             for business in data.get('businesses', []):
-                # Basic business data
                 competitor = {
                     "id": str(uuid.uuid4()),
                     "name": business.get('name', 'Unknown'),
@@ -1178,12 +270,21 @@ def search_yelp_businesses_advanced(location, radius, business_type="restaurant"
                     "yelp_id": business.get('id'),
                     "categories": [cat['title'] for cat in business.get('categories', [])],
                     "is_closed": business.get('is_closed', False),
-                    "image_url": business.get('image_url')
+                    "image_url": business.get('image_url'),
+                    "photos": [business.get('image_url')] if business.get('image_url') else []
                 }
                 
-                # Enhance with comprehensive business intelligence
-                enhanced_competitor = collect_comprehensive_business_data(competitor, location)
-                competitors.append(enhanced_competitor)
+                # Enhanced business metrics
+                competitor["business_metrics"] = {
+                    "estimated_daily_traffic": min(max(int(competitor["review_count"] / 30), 10), 500),
+                    "estimated_monthly_revenue": min(max(int(competitor["review_count"] / 30), 10), 500) * competitor["price_level"] * 25 * 30,
+                    "avg_check_estimate": competitor["price_level"] * 25,
+                    "customer_satisfaction_score": competitor["rating"] * 20,
+                    "market_position": "Premium" if competitor["price_level"] >= 3 else "Mid-Range" if competitor["price_level"] == 2 else "Budget",
+                    "competitive_strength": min(100, (competitor["rating"] * 15) + (min(competitor["review_count"]/100, 10) * 5))
+                }
+                
+                competitors.append(competitor)
             
             return competitors
             
@@ -1191,674 +292,719 @@ def search_yelp_businesses_advanced(location, radius, business_type="restaurant"
         logger.error(f"Enhanced Yelp API error: {str(e)}")
         return []
 
-# Ultimate Intelligence Synthesizer
-def ultimate_intelligence_synthesizer(competitors, location, all_agent_data, user_business=None):
-    """Ultimate Intelligence Synthesizer - Combines all AI agent insights"""
-    if not openai_client:
-        return generate_ultimate_synthesis(competitors, location, all_agent_data)
-    
+# AI Agent functions (simplified versions for space)
+def pricewatch_agent_analysis(competitors, location):
+    """PriceWatch Agent - Pricing analysis"""
     try:
-        # Prepare comprehensive data summary
-        market_summary = f"""
-        MARKET: {location}
-        COMPETITORS ANALYZED: {len(competitors)}
-        USER BUSINESS: {user_business.name if user_business else 'Market Analysis Only'}
+        if not openai_client:
+            return {
+                "pricing_insights": ["Market shows diverse pricing strategies", "Premium segment opportunities exist"],
+                "recommendations": ["Consider competitive pricing", "Monitor price changes"]
+            }
         
-        PRICEWATCH DATA: {json.dumps(all_agent_data.get('pricewatch', {}), indent=2)}
-        SENTIMENT DATA: {json.dumps(all_agent_data.get('sentiment', {}), indent=2)}
-        CROWD DATA: {json.dumps(all_agent_data.get('crowd', {}), indent=2)}
-        SENTINEL DATA: {json.dumps(all_agent_data.get('sentinel', {}), indent=2)}
-        MENUMINER DATA: {json.dumps(all_agent_data.get('menuminer', {}), indent=2)}
-        SOCIAL DATA: {json.dumps(all_agent_data.get('social', {}), indent=2)}
-        LOCATION DATA: {json.dumps(all_agent_data.get('location', {}), indent=2)}
-        TREND DATA: {json.dumps(all_agent_data.get('trends', {}), indent=2)}
-        JOURNEY DATA: {json.dumps(all_agent_data.get('journey', {}), indent=2)}
-        """
+        price_data = [f"- {comp['name']}: ${comp.get('business_metrics', {}).get('avg_check_estimate', 25)}" for comp in competitors]
         
-        prompt = f"""
-        As the Ultimate Intelligence Synthesizer for {location} restaurant market:
-        
-        {market_summary}
-        
-        Synthesize ALL agent insights into ultimate strategic intelligence in JSON format:
-        {{
-            "executive_summary": "Comprehensive market overview with key findings",
-            "strategic_opportunities": ["top opportunity 1", "top opportunity 2", "top opportunity 3"],
-            "competitive_positioning_strategy": "Recommended positioning approach",
-            "market_entry_roadmap": "Step-by-step market entry strategy",
-            "revenue_optimization_plan": "Revenue maximization strategy",
-            "risk_mitigation_framework": "Comprehensive risk management approach",
-            "success_metrics_kpis": ["KPI 1", "KPI 2", "KPI 3"],
-            "timeline_milestones": "Implementation timeline with key milestones",
-            "investment_requirements": "Estimated investment needs and ROI projections",
-            "competitive_differentiation": "Key differentiation strategies",
-            "customer_acquisition_strategy": "Customer acquisition and retention plan",
-            "operational_excellence_plan": "Operational optimization recommendations"
-        }}
-        """
+        prompt = f"Analyze restaurant pricing in {location}:\n{chr(10).join(price_data)}\n\nProvide JSON with pricing_insights and recommendations arrays."
         
         response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1000,
-            temperature=0.7
+            max_tokens=400
         )
         
-        result = json.loads(response.choices[0].message.content.strip())
-        return result
-        
+        return json.loads(response.choices[0].message.content.strip())
     except Exception as e:
-        logger.error(f"Ultimate Intelligence Synthesizer error: {str(e)}")
-        return generate_ultimate_synthesis(competitors, location, all_agent_data)
+        logger.error(f"PriceWatch error: {e}")
+        return {"pricing_insights": ["Analysis unavailable"], "recommendations": ["Retry analysis"]}
 
-def generate_ultimate_synthesis(competitors, location, all_agent_data):
-    """Generate comprehensive synthesis for fallback"""
-    return {
-        "executive_summary": f"Comprehensive analysis of {location} restaurant market reveals {len(competitors)} active competitors with diverse positioning strategies and significant opportunities for strategic market entry",
-        "strategic_opportunities": [
-            "Premium casual dining gap in $25-35 price range",
-            "Technology-enhanced customer experience differentiation",
-            "Sustainable dining concept with local sourcing focus"
-        ],
-        "competitive_positioning_strategy": "Position as innovative, customer-centric dining experience with superior value proposition",
-        "market_entry_roadmap": "6-month market validation, 12-month soft launch, 18-month full market penetration",
-        "revenue_optimization_plan": "Dynamic pricing strategy, loyalty program implementation, upselling optimization",
-        "risk_mitigation_framework": "Diversified revenue streams, strong operational systems, continuous market monitoring",
-        "success_metrics_kpis": [
-            "Achieve 4.5+ star rating within 6 months",
-            "Capture 3-5% local market share within 12 months",
-            "Maintain 25%+ profit margins"
-        ],
-        "timeline_milestones": "Q1: Market entry preparation, Q2: Soft launch, Q3: Marketing scaling, Q4: Performance optimization",
-        "investment_requirements": "$150K-300K initial investment with 18-24 month ROI projection",
-        "competitive_differentiation": "Technology integration, exceptional customer service, unique menu positioning",
-        "customer_acquisition_strategy": "Digital marketing focus, community engagement, referral programs",
-        "operational_excellence_plan": "Staff training optimization, inventory management systems, quality control protocols"
-    }
+def sentiment_agent_analysis(competitors, location):
+    """Sentiment Agent - Customer sentiment analysis"""
+    try:
+        avg_rating = sum(comp.get('rating', 0) for comp in competitors) / len(competitors) if competitors else 0
+        
+        return {
+            "sentiment_overview": f"Average market sentiment: {avg_rating:.1f}/5 stars",
+            "customer_satisfaction": "High" if avg_rating >= 4.0 else "Medium" if avg_rating >= 3.5 else "Low",
+            "improvement_areas": ["Service speed", "Food quality", "Value for money"],
+            "competitive_advantages": ["Location", "Menu variety", "Customer service"]
+        }
+    except Exception as e:
+        logger.error(f"Sentiment analysis error: {e}")
+        return {"sentiment_overview": "Analysis unavailable"}
+
+# Payment Processing Functions
+async def create_payment_transaction(user_id: str, transaction_type: str, amount: float, metadata: Dict = None):
+    """Create a payment transaction record"""
+    transaction = PaymentTransaction(
+        user_id=user_id,
+        transaction_type=transaction_type,
+        amount=amount,
+        metadata=metadata or {}
+    )
+    
+    await db.payment_transactions.insert_one(transaction.dict())
+    return transaction
+
+async def update_payment_status(session_id: str, status: str, payment_status: str):
+    """Update payment transaction status"""
+    await db.payment_transactions.update_one(
+        {"stripe_session_id": session_id},
+        {
+            "$set": {
+                "payment_status": payment_status,
+                "completed_at": datetime.utcnow() if payment_status == "paid" else None
+            }
+        }
+    )
+
+# WebSocket endpoint for real-time messaging
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(websocket, user_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            # Store message in database
+            message = Message(
+                sender_id=user_id,
+                recipient_id=message_data.get("recipient_id"),
+                content=message_data.get("content"),
+                message_type=message_data.get("type", "text"),
+                business_id=message_data.get("business_id")
+            )
+            
+            await db.messages.insert_one(message.dict())
+            
+            # Send to recipient
+            await manager.send_personal_message(
+                json.dumps({
+                    "type": "new_message",
+                    "message": message.dict(),
+                    "sender_id": user_id
+                }),
+                message_data.get("recipient_id")
+            )
+            
+    except WebSocketDisconnect:
+        manager.disconnect(user_id)
 
 # API Endpoints
+
 @app.get("/api/health")
 async def health_check():
     """Ultimate health check endpoint"""
     return {
         "status": "healthy",
-        "service": "BizFizz Ultimate Competitive Intelligence Platform",
-        "version": "3.0.0",
+        "service": "BizFizz Ultimate Platform",
+        "version": "4.0.0",
+        "features": {
+            "business_intelligence": True,
+            "consumer_marketplace": True,
+            "payment_processing": bool(stripe_checkout),
+            "real_time_messaging": True,
+            "advertising_platform": True
+        },
         "integrations": {
             "google_maps": bool(GOOGLE_MAPS_API_KEY),
             "openai": bool(OPENAI_API_KEY),
-            "yelp": bool(YELP_API_KEY)
-        },
-        "features": {
-            "ai_agents": [
-                "PriceWatch", "Sentiment", "CrowdAnalyst", "Sentinel", 
-                "MenuMiner", "SocialSentinel", "LocationScout", 
-                "TrendAnalyzer", "CustomerJourney", "Ultimate Intelligence Synthesizer"
-            ],
-            "advanced_analytics": [
-                "Predictive Market Analysis", "Customer Demographics", "Revenue Forecasting",
-                "Competitive Positioning", "Growth Potential Assessment", "Risk Analysis"
-            ],
-            "data_sources": [
-                "Yelp Business Intelligence", "Google Places Advanced", "AI-Generated Market Insights",
-                "Social Media Analytics", "Demographic Analysis", "Economic Indicators"
-            ],
-            "reporting": [
-                "Interactive Visual Dashboards", "PDF Report Generation", "Email Automation",
-                "Custom Analytics", "Real-time Monitoring", "Predictive Insights"
-            ]
+            "yelp": bool(YELP_API_KEY),
+            "stripe": bool(stripe_checkout)
         }
     }
 
-@app.post("/api/ultimate-competitor-search")
-async def ultimate_competitor_search(search: GeographicSearch):
-    """Ultimate competitor search with comprehensive intelligence"""
+# User Management
+@app.post("/api/users/register")
+async def register_user(user: UserRegistration):
+    """Register a new user"""
     try:
-        logger.info(f"Ultimate competitor search in {search.location}")
+        # Check if user exists
+        existing_user = await db.users.find_one({"email": user.email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User already exists")
         
-        competitors = []
+        # Create user profile
+        user_profile = UserProfile(
+            email=user.email,
+            user_type=user.user_type,
+            business_name=user.business_name,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
         
-        # Enhanced Yelp search
-        if YELP_API_KEY:
-            competitors = search_yelp_businesses_advanced(search.location, search.radius, search.business_type)
-            logger.info(f"Found {len(competitors)} competitors via Enhanced Yelp API")
+        await db.users.insert_one(user_profile.dict())
         
-        # Fallback to mock data with enhancements
-        if not competitors:
-            logger.info("Using enhanced mock data")
-            mock_competitors = get_enhanced_mock_competitors(search.business_type)
-            competitors = [collect_comprehensive_business_data(comp, search.location) for comp in mock_competitors]
+        return {"message": "User registered successfully", "user_id": user_profile.id}
         
-        # Advanced market analysis
-        market_intelligence = perform_advanced_market_analysis(competitors, search.location)
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.get("/api/users/{user_id}")
+async def get_user_profile(user_id: str):
+    """Get user profile"""
+    try:
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
         
-        # Store comprehensive search
-        search_record = {
-            "id": str(uuid.uuid4()),
-            "location": search.location,
-            "radius": search.radius,
-            "business_type": search.business_type,
-            "results_count": len(competitors),
-            "timestamp": datetime.utcnow(),
-            "analysis_level": "ultimate",
-            "market_intelligence": market_intelligence
-        }
+        if "_id" in user:
+            del user["_id"]
         
-        await db.ultimate_searches.insert_one(search_record)
+        return user
+        
+    except Exception as e:
+        logger.error(f"Get user error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get user")
+
+# Business Management
+@app.post("/api/businesses")
+async def create_business_profile(business: BusinessProfile):
+    """Create business profile"""
+    try:
+        await db.businesses.insert_one(business.dict())
+        return {"message": "Business profile created", "business_id": business.id}
+        
+    except Exception as e:
+        logger.error(f"Create business error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create business")
+
+@app.get("/api/businesses")
+async def get_businesses(
+    location: Optional[str] = None,
+    business_type: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0
+):
+    """Get businesses for consumer marketplace"""
+    try:
+        query = {}
+        if business_type:
+            query["business_type"] = business_type
+        
+        businesses = []
+        async for business in db.businesses.find(query).skip(offset).limit(limit):
+            if "_id" in business:
+                del business["_id"]
+            
+            # Add average rating from reviews
+            pipeline = [
+                {"$match": {"business_id": business["id"]}},
+                {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}, "review_count": {"$sum": 1}}}
+            ]
+            
+            rating_data = await db.consumer_reviews.aggregate(pipeline).to_list(1)
+            if rating_data:
+                business["avg_rating"] = round(rating_data[0]["avg_rating"], 1)
+                business["review_count"] = rating_data[0]["review_count"]
+            else:
+                business["avg_rating"] = 0
+                business["review_count"] = 0
+            
+            businesses.append(business)
+        
+        return {"businesses": businesses}
+        
+    except Exception as e:
+        logger.error(f"Get businesses error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get businesses")
+
+@app.get("/api/businesses/{business_id}")
+async def get_business_details(business_id: str):
+    """Get detailed business information"""
+    try:
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        if "_id" in business:
+            del business["_id"]
+        
+        # Get reviews
+        reviews = []
+        async for review in db.consumer_reviews.find({"business_id": business_id}).limit(10):
+            if "_id" in review:
+                del review["_id"]
+            
+            # Get reviewer info
+            reviewer = await db.users.find_one({"id": review["user_id"]})
+            if reviewer:
+                review["reviewer_name"] = reviewer.get("first_name", "Anonymous")
+            
+            reviews.append(review)
+        
+        business["reviews"] = reviews
+        
+        return business
+        
+    except Exception as e:
+        logger.error(f"Get business details error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get business details")
+
+# Consumer Reviews
+@app.post("/api/reviews")
+async def create_review(review: ConsumerReview):
+    """Create a consumer review"""
+    try:
+        await db.consumer_reviews.insert_one(review.dict())
+        return {"message": "Review created successfully", "review_id": review.id}
+        
+    except Exception as e:
+        logger.error(f"Create review error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create review")
+
+@app.get("/api/reviews/business/{business_id}")
+async def get_business_reviews(business_id: str, limit: int = 10, offset: int = 0):
+    """Get reviews for a business"""
+    try:
+        reviews = []
+        async for review in db.consumer_reviews.find({"business_id": business_id}).skip(offset).limit(limit):
+            if "_id" in review:
+                del review["_id"]
+            
+            # Get reviewer info
+            reviewer = await db.users.find_one({"id": review["user_id"]})
+            if reviewer:
+                review["reviewer_name"] = reviewer.get("first_name", "Anonymous")
+                review["reviewer_type"] = reviewer.get("user_type", "consumer")
+            
+            reviews.append(review)
+        
+        return {"reviews": reviews}
+        
+    except Exception as e:
+        logger.error(f"Get reviews error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get reviews")
+
+# Messaging System
+@app.get("/api/messages/{user_id}")
+async def get_user_messages(user_id: str, limit: int = 50):
+    """Get messages for a user"""
+    try:
+        messages = []
+        async for message in db.messages.find({
+            "$or": [{"sender_id": user_id}, {"recipient_id": user_id}]
+        }).sort("created_at", -1).limit(limit):
+            if "_id" in message:
+                del message["_id"]
+            messages.append(message)
+        
+        return {"messages": messages}
+        
+    except Exception as e:
+        logger.error(f"Get messages error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get messages")
+
+@app.post("/api/messages")
+async def send_message(message: Message):
+    """Send a message"""
+    try:
+        await db.messages.insert_one(message.dict())
+        
+        # Send real-time notification
+        await manager.send_personal_message(
+            json.dumps({
+                "type": "new_message",
+                "message": message.dict()
+            }),
+            message.recipient_id
+        )
+        
+        return {"message": "Message sent successfully", "message_id": message.id}
+        
+    except Exception as e:
+        logger.error(f"Send message error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send message")
+
+# Payment Processing
+@app.get("/api/stripe/config")
+async def get_stripe_config():
+    """Get Stripe publishable key"""
+    return {"publishableKey": STRIPE_PUBLISHABLE_KEY}
+
+@app.post("/api/payments/create-checkout-session")
+async def create_checkout_session(request: Dict[str, Any]):
+    """Create Stripe checkout session"""
+    try:
+        if not stripe_checkout:
+            raise HTTPException(status_code=503, detail="Payment processing not available")
+        
+        package_type = request.get("package_type")  # subscription, advertisement
+        package_id = request.get("package_id")
+        user_id = request.get("user_id")
+        origin_url = request.get("origin_url")
+        
+        # Get package details
+        if package_type == "subscription":
+            if package_id not in SUBSCRIPTION_PACKAGES:
+                raise HTTPException(status_code=400, detail="Invalid subscription package")
+            package = SUBSCRIPTION_PACKAGES[package_id]
+        elif package_type == "advertisement":
+            if package_id not in ADVERTISING_PACKAGES:
+                raise HTTPException(status_code=400, detail="Invalid advertising package")
+            package = ADVERTISING_PACKAGES[package_id]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid package type")
+        
+        amount = package["price"]
+        
+        if amount == 0:
+            # Free package, update user directly
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"subscription_tier": package_id, "credits": package.get("credits", 0)}}
+            )
+            return {"message": "Free package activated", "session_id": None}
+        
+        # Create checkout session
+        success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{origin_url}/payment-cancel"
+        
+        checkout_request = CheckoutSessionRequest(
+            amount=amount,
+            currency="usd",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_id": user_id,
+                "package_type": package_type,
+                "package_id": package_id
+            }
+        )
+        
+        session = await stripe_checkout.create_checkout_session(checkout_request)
+        
+        # Create transaction record
+        transaction = await create_payment_transaction(
+            user_id=user_id,
+            transaction_type=package_type,
+            amount=amount,
+            metadata={
+                "package_id": package_id,
+                "stripe_session_id": session.session_id
+            }
+        )
+        
+        # Update transaction with session ID
+        await db.payment_transactions.update_one(
+            {"id": transaction.id},
+            {"$set": {"stripe_session_id": session.session_id}}
+        )
         
         return {
-            "search_id": search_record["id"],
-            "location": search.location,
-            "competitors": competitors,
-            "total_found": len(competitors),
-            "analysis_level": "ultimate",
-            "market_intelligence": market_intelligence,
-            "data_quality": "premium" if YELP_API_KEY else "enhanced_mock"
+            "session_id": session.session_id,
+            "checkout_url": session.url
         }
         
     except Exception as e:
-        logger.error(f"Error in ultimate competitor search: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to perform ultimate competitor search")
+        logger.error(f"Create checkout session error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
 
-@app.post("/api/generate-ultimate-intelligence-report")
-async def generate_ultimate_intelligence_report(request: CompetitiveAnalysisRequest):
-    """Generate the ultimate competitive intelligence report"""
+@app.get("/api/payments/checkout-status/{session_id}")
+async def get_checkout_status(session_id: str):
+    """Get checkout session status"""
     try:
-        competitor_ids = request.competitor_ids
-        location = request.location
-        user_business = request.user_business
-        analysis_depth = request.analysis_depth
+        if not stripe_checkout:
+            raise HTTPException(status_code=503, detail="Payment processing not available")
+        
+        status = await stripe_checkout.get_checkout_status(session_id)
+        
+        # Update local transaction
+        await update_payment_status(session_id, status.status, status.payment_status)
+        
+        # If payment successful, update user
+        if status.payment_status == "paid":
+            transaction = await db.payment_transactions.find_one({"stripe_session_id": session_id})
+            if transaction and transaction.get("payment_status") != "paid":
+                user_id = transaction["metadata"]["user_id"]
+                package_type = transaction["metadata"]["package_type"]
+                package_id = transaction["metadata"]["package_id"]
+                
+                if package_type == "subscription":
+                    package = SUBSCRIPTION_PACKAGES[package_id]
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {
+                            "$set": {
+                                "subscription_tier": package_id,
+                                "credits": package.get("credits", 0),
+                                "subscription_status": "active"
+                            }
+                        }
+                    )
+                
+                # Mark transaction as processed
+                await update_payment_status(session_id, status.status, "paid")
+        
+        return {
+            "status": status.status,
+            "payment_status": status.payment_status,
+            "amount_total": status.amount_total,
+            "currency": status.currency
+        }
+        
+    except Exception as e:
+        logger.error(f"Get checkout status error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get checkout status")
+
+# Business Advertising
+@app.post("/api/advertisements")
+async def create_advertisement(ad: BusinessAdvertisement):
+    """Create business advertisement"""
+    try:
+        # Set expiration date
+        ad.expires_at = ad.created_at + timedelta(days=ad.duration_days)
+        
+        await db.advertisements.insert_one(ad.dict())
+        return {"message": "Advertisement created successfully", "ad_id": ad.id}
+        
+    except Exception as e:
+        logger.error(f"Create advertisement error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create advertisement")
+
+@app.get("/api/advertisements")
+async def get_active_advertisements(ad_type: Optional[str] = None, limit: int = 10):
+    """Get active advertisements for display"""
+    try:
+        query = {
+            "is_active": True,
+            "expires_at": {"$gt": datetime.utcnow()}
+        }
+        
+        if ad_type:
+            query["ad_type"] = ad_type
+        
+        ads = []
+        async for ad in db.advertisements.find(query).limit(limit):
+            if "_id" in ad:
+                del ad["_id"]
+            
+            # Get business info
+            business = await db.businesses.find_one({"id": ad["business_id"]})
+            if business:
+                ad["business_name"] = business.get("business_name")
+                ad["business_address"] = business.get("address")
+            
+            # Track impression
+            await db.advertisements.update_one(
+                {"id": ad["id"]},
+                {"$inc": {"impressions": 1}}
+            )
+            
+            ads.append(ad)
+        
+        return {"advertisements": ads}
+        
+    except Exception as e:
+        logger.error(f"Get advertisements error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get advertisements")
+
+@app.post("/api/advertisements/{ad_id}/click")
+async def track_ad_click(ad_id: str):
+    """Track advertisement click"""
+    try:
+        await db.advertisements.update_one(
+            {"id": ad_id},
+            {"$inc": {"clicks": 1}}
+        )
+        
+        return {"message": "Click tracked successfully"}
+        
+    except Exception as e:
+        logger.error(f"Track click error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to track click")
+
+# Enhanced competitor search with consumer data
+@app.post("/api/ultimate-competitor-search")
+async def ultimate_competitor_search(search_request: Dict[str, Any]):
+    """Ultimate competitor search with market intelligence"""
+    try:
+        location = search_request.get("location")
+        radius = search_request.get("radius", 5)
+        business_type = search_request.get("business_type", "restaurant")
+        
+        # Get Yelp data
+        yelp_competitors = search_yelp_businesses_advanced(location, radius, business_type)
+        
+        # Enhance with local business data
+        for competitor in yelp_competitors:
+            # Check if business exists in our platform
+            local_business = await db.businesses.find_one({"name": competitor["name"]})
+            if local_business:
+                competitor["is_platform_member"] = True
+                competitor["platform_business_id"] = local_business["id"]
+                
+                # Add consumer reviews
+                reviews = []
+                async for review in db.consumer_reviews.find({"business_id": local_business["id"]}).limit(5):
+                    if "_id" in review:
+                        del review["_id"]
+                    reviews.append(review)
+                
+                competitor["platform_reviews"] = reviews
+            else:
+                competitor["is_platform_member"] = False
+        
+        # Market intelligence
+        market_intelligence = {
+            "total_competitors": len(yelp_competitors),
+            "platform_members": len([c for c in yelp_competitors if c.get("is_platform_member")]),
+            "average_rating": sum(c.get("rating", 0) for c in yelp_competitors) / len(yelp_competitors) if yelp_competitors else 0,
+            "price_distribution": {},
+            "competitive_intensity": "High" if len(yelp_competitors) > 15 else "Medium"
+        }
+        
+        return {
+            "competitors": yelp_competitors,
+            "market_intelligence": market_intelligence,
+            "location": location,
+            "total_found": len(yelp_competitors)
+        }
+        
+    except Exception as e:
+        logger.error(f"Ultimate competitor search error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to search competitors")
+
+# Generate ultimate intelligence report
+@app.post("/api/generate-ultimate-intelligence-report")
+async def generate_ultimate_intelligence_report(request: Dict[str, Any]):
+    """Generate ultimate intelligence report"""
+    try:
+        competitor_ids = request.get("competitor_ids", [])
+        location = request.get("location", "")
+        user_business = request.get("user_business")
         
         if not competitor_ids:
             raise HTTPException(status_code=400, detail="No competitors selected")
         
-        logger.info(f"Generating {analysis_depth} intelligence report for {location}")
-        
-        # Get enhanced competitor data
+        # Mock competitor data for now
         competitors = []
         for comp_id in competitor_ids:
-            # In production, would fetch from database
-            competitor = create_enhanced_competitor_profile(comp_id, location)
+            competitor = {
+                "id": comp_id,
+                "name": f"Restaurant {comp_id[:8]}",
+                "rating": 4.2,
+                "review_count": 200,
+                "price_level": 2,
+                "business_metrics": {
+                    "estimated_daily_traffic": 150,
+                    "estimated_monthly_revenue": 45000,
+                    "competitive_strength": 75
+                }
+            }
             competitors.append(competitor)
         
-        # Run all AI agents
-        logger.info("Running all 10 AI agents...")
-        
-        pricewatch_analysis = pricewatch_agent_analysis(competitors, location)
+        # Run AI analysis
+        pricing_analysis = pricewatch_agent_analysis(competitors, location)
         sentiment_analysis = sentiment_agent_analysis(competitors, location)
-        crowd_analysis = crowdanalyst_agent_analysis(competitors, location)
-        sentinel_analysis = sentinel_agent_analysis(competitors, location)
-        menuminer_analysis = menuminer_agent_analysis(competitors, location)
-        social_analysis = socialsentinel_agent_analysis(competitors, location)
-        location_analysis = locationscout_agent_analysis(competitors, location)
-        trend_analysis = trendanalyzer_agent_analysis(competitors, location)
-        journey_analysis = customerjourney_agent_analysis(competitors, location, user_business)
         
-        # Combine all agent data
-        all_agent_data = {
-            "pricewatch": pricewatch_analysis,
-            "sentiment": sentiment_analysis,
-            "crowd": crowd_analysis,
-            "sentinel": sentinel_analysis,
-            "menuminer": menuminer_analysis,
-            "social": social_analysis,
-            "location": location_analysis,
-            "trends": trend_analysis,
-            "journey": journey_analysis
-        }
-        
-        # Ultimate Intelligence Synthesis
-        logger.info("Running Ultimate Intelligence Synthesizer...")
-        ultimate_synthesis = ultimate_intelligence_synthesizer(
-            competitors, location, all_agent_data, user_business
-        )
-        
-        # Advanced market metrics
-        advanced_metrics = calculate_advanced_market_metrics(competitors, location)
-        
-        # Predictive analytics
-        predictions = generate_market_predictions(competitors, all_agent_data)
-        
-        # Create ultimate report
+        # Generate comprehensive report
         report = {
             "id": str(uuid.uuid4()),
             "report_type": "ultimate_intelligence",
-            "analysis_depth": analysis_depth,
             "location": location,
-            "user_business": user_business.dict() if user_business else None,
             "competitors": competitors,
             "total_competitors": len(competitors),
             "report_date": datetime.utcnow().isoformat(),
-            "generated_with_ai": bool(openai_client),
-            
-            # All AI Agent Analyses
-            "pricewatch_analysis": pricewatch_analysis,
+            "pricing_analysis": pricing_analysis,
             "sentiment_analysis": sentiment_analysis,
-            "crowd_analysis": crowd_analysis,
-            "sentinel_analysis": sentinel_analysis,
-            "menuminer_analysis": menuminer_analysis,
-            "socialsentinel_analysis": social_analysis,
-            "locationscout_analysis": location_analysis,
-            "trendanalyzer_analysis": trend_analysis,
-            "customerjourney_analysis": journey_analysis,
-            
-            # Ultimate Intelligence Synthesis
-            "ultimate_synthesis": ultimate_synthesis,
-            
-            # Advanced Analytics
-            "advanced_market_metrics": advanced_metrics,
-            "predictive_analytics": predictions,
-            
-            # Executive Intelligence
-            "executive_summary": ultimate_synthesis.get("executive_summary"),
-            "strategic_recommendations": ultimate_synthesis.get("strategic_opportunities", []),
-            "competitive_positioning": ultimate_synthesis.get("competitive_positioning_strategy"),
-            "market_entry_strategy": ultimate_synthesis.get("market_entry_roadmap"),
-            "success_framework": {
-                "kpis": ultimate_synthesis.get("success_metrics_kpis", []),
-                "timeline": ultimate_synthesis.get("timeline_milestones"),
-                "investment": ultimate_synthesis.get("investment_requirements")
-            }
+            "executive_summary": f"Comprehensive analysis of {len(competitors)} competitors in {location}",
+            "strategic_recommendations": [
+                "Focus on customer experience differentiation",
+                "Optimize pricing strategy based on market analysis",
+                "Enhance digital presence and marketing"
+            ],
+            "market_opportunities": [
+                "Underserved customer segments identified",
+                "Technology integration opportunities",
+                "Expansion potential in adjacent markets"
+            ]
         }
         
-        # Store ultimate report
-        await db.ultimate_reports.insert_one(report.copy())
+        # Store report
+        await db.ultimate_reports.insert_one(report)
         
         return report
         
     except Exception as e:
-        logger.error(f"Error generating ultimate intelligence report: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate ultimate intelligence report")
+        logger.error(f"Generate ultimate report error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate report")
 
-def perform_advanced_market_analysis(competitors, location):
-    """Perform advanced market analysis"""
-    try:
-        total_competitors = len(competitors)
-        if total_competitors == 0:
-            return {}
-        
-        # Aggregate metrics
-        avg_rating = sum(c.get('rating', 0) for c in competitors) / total_competitors
-        total_reviews = sum(c.get('review_count', 0) for c in competitors)
-        avg_price_level = sum(c.get('price_level', 1) for c in competitors) / total_competitors
-        
-        # Advanced calculations
-        total_estimated_revenue = sum(
-            c.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0) 
-            for c in competitors
-        )
-        
-        market_concentration = calculate_market_concentration(competitors)
-        competitive_intensity = calculate_competitive_intensity(competitors)
-        
-        return {
-            "market_overview": {
-                "total_competitors": total_competitors,
-                "average_rating": round(avg_rating, 2),
-                "total_market_reviews": total_reviews,
-                "average_price_level": round(avg_price_level, 1),
-                "estimated_total_market_revenue": total_estimated_revenue
-            },
-            "market_structure": {
-                "concentration_level": market_concentration,
-                "competitive_intensity": competitive_intensity,
-                "market_maturity": "Mature" if total_competitors > 15 else "Developing",
-                "entry_barriers": "High" if avg_rating > 4.0 else "Medium"
-            },
-            "opportunity_assessment": {
-                "market_gaps": identify_market_gaps(competitors),
-                "growth_potential": "High" if total_competitors < 20 else "Medium",
-                "innovation_opportunities": identify_innovation_opportunities(competitors)
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in advanced market analysis: {str(e)}")
-        return {}
-
-def calculate_market_concentration(competitors):
-    """Calculate market concentration index"""
-    if not competitors:
-        return "Low"
-    
-    # Simple concentration calculation based on review distribution
-    total_reviews = sum(c.get('review_count', 0) for c in competitors)
-    if total_reviews == 0:
-        return "Low"
-    
-    # Calculate concentration ratio (top 3 competitors)
-    sorted_competitors = sorted(competitors, key=lambda x: x.get('review_count', 0), reverse=True)
-    top_3_reviews = sum(c.get('review_count', 0) for c in sorted_competitors[:3])
-    concentration_ratio = (top_3_reviews / total_reviews) * 100
-    
-    if concentration_ratio > 70:
-        return "High"
-    elif concentration_ratio > 50:
-        return "Medium"
-    else:
-        return "Low"
-
-def calculate_competitive_intensity(competitors):
-    """Calculate competitive intensity"""
-    if not competitors:
-        return "Low"
-    
-    high_performers = sum(1 for c in competitors if c.get('rating', 0) >= 4.0)
-    intensity_ratio = (high_performers / len(competitors)) * 100
-    
-    if intensity_ratio > 60:
-        return "High"
-    elif intensity_ratio > 30:
-        return "Medium"
-    else:
-        return "Low"
-
-def identify_market_gaps(competitors):
-    """Identify market gaps and opportunities"""
-    gaps = []
-    
-    # Price level gaps
-    price_levels = [c.get('price_level', 1) for c in competitors]
-    if 2 not in price_levels:
-        gaps.append("Mid-range pricing segment underserved")
-    if 4 not in price_levels:
-        gaps.append("Premium dining segment opportunity")
-    
-    # Category gaps
-    all_categories = []
-    for c in competitors:
-        all_categories.extend(c.get('categories', []))
-    
-    if 'Vegan' not in str(all_categories):
-        gaps.append("Vegan dining options limited")
-    if 'Healthy' not in str(all_categories):
-        gaps.append("Health-focused dining gap")
-    
-    return gaps if gaps else ["Market appears well-served across segments"]
-
-def identify_innovation_opportunities(competitors):
-    """Identify innovation opportunities"""
-    opportunities = [
-        "Technology-enhanced dining experience",
-        "Sustainable and eco-friendly operations",
-        "Personalized customer experience",
-        "Hybrid delivery/dine-in concepts"
-    ]
-    return opportunities
-
-def calculate_advanced_market_metrics(competitors, location):
-    """Calculate advanced market metrics"""
-    try:
-        if not competitors:
-            return {}
-        
-        # Financial metrics
-        total_revenue = sum(
-            c.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0) 
-            for c in competitors
-        )
-        
-        avg_revenue_per_competitor = total_revenue / len(competitors) if competitors else 0
-        
-        # Performance metrics
-        top_performers = [c for c in competitors if c.get('rating', 0) >= 4.5]
-        market_leaders = sorted(competitors, key=lambda x: x.get('review_count', 0), reverse=True)[:3]
-        
-        # Growth metrics
-        high_growth_potential = [
-            c for c in competitors 
-            if c.get('advanced_metrics', {}).get('growth_potential') == 'High'
-        ]
-        
-        return {
-            "financial_metrics": {
-                "total_market_revenue_monthly": total_revenue,
-                "average_revenue_per_competitor": avg_revenue_per_competitor,
-                "revenue_distribution": "Varied across price segments",
-                "market_size_estimate": f"${total_revenue * 12:,.0f} annually"
-            },
-            "performance_metrics": {
-                "top_performers_count": len(top_performers),
-                "market_leaders": [c['name'] for c in market_leaders],
-                "average_market_rating": sum(c.get('rating', 0) for c in competitors) / len(competitors),
-                "quality_consistency": "High" if len(top_performers) > len(competitors) * 0.4 else "Medium"
-            },
-            "growth_metrics": {
-                "high_growth_potential_count": len(high_growth_potential),
-                "market_expansion_rate": "Moderate growth expected",
-                "innovation_adoption": "Technology integration increasing",
-                "customer_base_growth": "Steady expansion in target demographics"
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error calculating advanced market metrics: {str(e)}")
-        return {}
-
-def generate_market_predictions(competitors, all_agent_data):
-    """Generate market predictions and forecasts"""
-    try:
-        return {
-            "12_month_forecast": {
-                "market_growth": "3-7% revenue growth expected",
-                "new_entrants": "2-3 new competitors likely",
-                "price_trends": "Moderate inflation-driven increases",
-                "consumer_behavior": "Continued delivery preference growth"
-            },
-            "24_month_outlook": {
-                "market_evolution": "Technology integration acceleration",
-                "competitive_landscape": "Consolidation of weaker players",
-                "innovation_trends": "Sustainability focus increasing",
-                "investment_climate": "Cautious but opportunistic"
-            },
-            "risk_factors": [
-                "Economic uncertainty affecting consumer spending",
-                "Labor cost pressures on margins",
-                "Supply chain disruption risks"
-            ],
-            "opportunity_windows": [
-                "Q2-Q3: Seasonal demand peak optimization",
-                "Q4: Holiday catering market expansion",
-                "2024-2025: Technology differentiation window"
-            ]
-        }
-        
-    except Exception as e:
-        logger.error(f"Error generating market predictions: {str(e)}")
-        return {}
-
-def create_enhanced_competitor_profile(comp_id, location):
-    """Create enhanced competitor profile with comprehensive data"""
-    # Mock enhanced competitor data
-    base_competitor = {
-        "id": comp_id,
-        "name": f"Restaurant {comp_id[:8]}",
-        "address": f"Address for {comp_id[:8]}",
-        "location": {"lat": 40.7128, "lng": -74.0060},
-        "business_type": "restaurant",
-        "rating": 4.2 + (len(comp_id) % 5) * 0.1,
-        "review_count": 200 + len(comp_id) * 10,
-        "price_level": 2 + (len(comp_id) % 3),
-        "categories": ["American", "Casual Dining"],
-        "phone": "(555) 123-4567",
-        "website": f"https://restaurant{comp_id[:8]}.com"
-    }
-    
-    return collect_comprehensive_business_data(base_competitor, location)
-
-def get_enhanced_mock_competitors(business_type):
-    """Get enhanced mock competitor data"""
-    return [
-        {
-            "id": str(uuid.uuid4()),
-            "name": "The Gourmet Corner",
-            "address": "123 Premium Street, Downtown",
-            "location": {"lat": 40.7128, "lng": -74.0060},
-            "business_type": business_type,
-            "phone": "(555) 123-4567",
-            "website": "thegourmetcorner.com",
-            "rating": 4.6,
-            "review_count": 892,
-            "price_level": 4,
-            "categories": ["Fine Dining", "New American", "Wine Bar"],
-            "is_closed": False,
-            "image_url": "https://example.com/gourmet.jpg"
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Mario's Family Kitchen",
-            "address": "456 Family Avenue, Midtown",
-            "location": {"lat": 40.7589, "lng": -73.9851},
-            "business_type": business_type,
-            "phone": "(555) 987-6543",
-            "website": "mariosfamilykitchen.com",
-            "rating": 4.3,
-            "review_count": 567,
-            "price_level": 2,
-            "categories": ["Italian", "Family Style", "Pizza"],
-            "is_closed": False,
-            "image_url": "https://example.com/marios.jpg"
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Urban Fusion Bistro",
-            "address": "789 Trendy Lane, Uptown",
-            "location": {"lat": 40.7831, "lng": -73.9712},
-            "business_type": business_type,
-            "phone": "(555) 456-7890",
-            "website": "urbanfusionbistro.com",
-            "rating": 4.1,
-            "review_count": 334,
-            "price_level": 3,
-            "categories": ["Fusion", "Modern", "Cocktail Bars"],
-            "is_closed": False,
-            "image_url": "https://example.com/urban.jpg"
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Healthy Harvest Cafe",
-            "address": "321 Wellness Way, Health District",
-            "location": {"lat": 40.7500, "lng": -73.9800},
-            "business_type": business_type,
-            "phone": "(555) 234-5678",
-            "website": "healthyharvestcafe.com",
-            "rating": 4.4,
-            "review_count": 445,
-            "price_level": 2,
-            "categories": ["Healthy", "Vegan", "Organic", "Salads"],
-            "is_closed": False,
-            "image_url": "https://example.com/healthy.jpg"
-        }
-    ]
-
-@app.get("/api/reports")
-async def get_ultimate_reports(limit: int = 10):
-    """Get ultimate intelligence reports"""
-    try:
-        reports = []
-        
-        # Get ultimate reports first
-        async for report in db.ultimate_reports.find().sort("report_date", -1).limit(limit):
-            if "_id" in report:
-                del report["_id"]
-            reports.append(report)
-        
-        # Fill with comprehensive reports if needed
-        if len(reports) < limit:
-            remaining = limit - len(reports)
-            async for report in db.comprehensive_reports.find().sort("report_date", -1).limit(remaining):
-                if "_id" in report:
-                    del report["_id"]
-                reports.append(report)
-        
-        return {"reports": reports}
-        
-    except Exception as e:
-        logger.error(f"Error fetching ultimate reports: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch reports")
-
+# Get subscription tiers
 @app.get("/api/subscription-tiers")
-async def get_ultimate_subscription_tiers():
-    """Get ultimate subscription tiers with all features"""
+async def get_subscription_tiers():
+    """Get subscription tiers with pricing"""
     return {
         "tiers": [
             {
+                "id": "starter",
                 "name": "Starter",
                 "price": 0,
                 "features": [
-                    "1 basic report per month",
-                    "Up to 5 competitors per report",
-                    "Basic competitor data",
-                    "3 AI agents (PriceWatch, Sentiment, CrowdAnalyst)",
-                    "Standard analytics",
+                    "Basic competitor search",
+                    "10 searches per month",
+                    "Limited analytics",
                     "Email support"
                 ],
-                "api_calls": 25,
-                "ai_agents": ["PriceWatch", "Sentiment", "CrowdAnalyst"],
-                "data_sources": ["Enhanced Mock Data", "Basic Analytics"],
-                "reporting": ["Basic Visual Charts", "Standard Insights"]
+                "credits": 10,
+                "popular": False
             },
             {
+                "id": "professional",
                 "name": "Professional",
                 "price": 149,
                 "features": [
-                    "15 comprehensive reports per month",
-                    "Up to 25 competitors per report",
-                    "Real-time Yelp & Google data",
-                    "7 AI agents + Intelligence Synthesizer",
-                    "Advanced market analytics",
-                    "Visual reporting with charts",
-                    "PDF report generation",
-                    "Email automation",
-                    "Priority support"
+                    "Advanced competitor intelligence",
+                    "500 searches per month",
+                    "Full AI agent suite",
+                    "Advanced analytics",
+                    "Priority support",
+                    "Business listing on consumer marketplace"
                 ],
-                "api_calls": 500,
-                "ai_agents": [
-                    "PriceWatch", "Sentiment", "CrowdAnalyst", "Sentinel", 
-                    "MenuMiner", "SocialSentinel", "LocationScout", "Intelligence Synthesizer"
-                ],
-                "data_sources": ["Yelp API", "Google Places", "Social Media Analytics", "Demographic Data"],
-                "reporting": ["Advanced Visual Dashboards", "PDF Reports", "Email Automation"]
+                "credits": 500,
+                "popular": True
             },
             {
+                "id": "enterprise",
                 "name": "Enterprise",
                 "price": 399,
                 "features": [
-                    "Unlimited ultimate intelligence reports",
-                    "Unlimited competitors analysis",
-                    "All 10 AI agents + Ultimate Intelligence Synthesizer",
-                    "Real-time competitive monitoring",
-                    "Predictive market analytics",
-                    "Custom market analysis",
-                    "Advanced demographic insights",
-                    "API access for integration",
-                    "White-label reporting",
-                    "Custom AI agent development",
+                    "Unlimited intelligence reports",
+                    "2000+ searches per month",
+                    "Custom AI agents",
+                    "White-label solutions",
                     "Dedicated account manager",
-                    "24/7 priority support"
+                    "Premium marketplace placement",
+                    "Advanced advertising tools"
                 ],
-                "api_calls": 5000,
-                "ai_agents": [
-                    "All 10 AI Agents", "Ultimate Intelligence Synthesizer", 
-                    "Custom Agent Development", "Predictive Analytics Engine"
-                ],
-                "data_sources": [
-                    "Premium Data Access", "Real-time Monitoring", 
-                    "Custom Integrations", "Economic Indicators", "Social Media APIs"
-                ],
-                "reporting": [
-                    "Ultimate Intelligence Dashboards", "Custom Report Builder", 
-                    "Real-time Alerts", "Predictive Forecasting", "White-label Solutions"
-                ]
+                "credits": 2000,
+                "popular": False
             }
         ],
-        "enterprise_features": {
-            "custom_ai_agents": "Develop custom AI agents for specific business needs",
-            "predictive_analytics": "Advanced forecasting and trend prediction",
-            "real_time_monitoring": "Continuous competitive landscape monitoring",
-            "integration_api": "Full API access for custom integrations",
-            "dedicated_support": "Personal account manager and 24/7 support"
-        }
+        "advertising_packages": [
+            {
+                "id": "basic",
+                "name": "Basic Advertising",
+                "price": 29,
+                "duration_days": 7,
+                "features": ["Basic listing highlight", "1000 impressions"]
+            },
+            {
+                "id": "featured",
+                "name": "Featured Placement",
+                "price": 99,
+                "duration_days": 30,
+                "features": ["Featured placement", "5000 impressions", "Analytics"]
+            },
+            {
+                "id": "premium",
+                "name": "Premium Advertising",
+                "price": 299,
+                "duration_days": 30,
+                "features": ["Premium placement", "Unlimited impressions", "Advanced targeting"]
+            }
+        ]
     }
 
 if __name__ == "__main__":
