@@ -115,8 +115,24 @@ if STRIPE_SECRET_KEY and STRIPE_SECRET_KEY != 'sk_test_placeholder':
         logger.error(f"Failed to initialize Stripe client: {str(e)}")
         stripe_checkout = None
 
+# Initialize Twitter client
+twitter_client = None
+if TWITTER_BEARER_TOKEN:
+    try:
+        twitter_client = tweepy.Client(
+            bearer_token=TWITTER_BEARER_TOKEN,
+            consumer_key=TWITTER_API_KEY,
+            consumer_secret=TWITTER_API_SECRET,
+            access_token=TWITTER_ACCESS_TOKEN,
+            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize Twitter client: {str(e)}")
+        twitter_client = None
+
 # Log API key status
-logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}")
+logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}, Twitter: {bool(twitter_client)}, Facebook: {bool(FACEBOOK_APP_ID)}, News: {bool(NEWS_API_KEY)}")
 
 # WebSocket connection manager for real-time messaging
 class ConnectionManager:
