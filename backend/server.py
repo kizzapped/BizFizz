@@ -774,6 +774,300 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except WebSocketDisconnect:
         manager.disconnect(user_id)
 
+# Social Media Monitoring API Endpoints
+
+@app.post("/api/social/monitoring/start")
+async def start_social_monitoring(rule: SocialMonitoringRule):
+    """Start social media monitoring for a business"""
+    try:
+        # Store monitoring rule
+        await db.social_monitoring_rules.insert_one(rule.dict())
+        
+        # Start background monitoring task
+        asyncio.create_task(run_social_monitoring(rule))
+        
+        return {"message": "Social monitoring started successfully", "rule_id": rule.id}
+        
+    except Exception as e:
+        logger.error(f"Start monitoring error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to start monitoring")
+
+@app.post("/api/social/monitoring/stop/{rule_id}")
+async def stop_social_monitoring(rule_id: str):
+    """Stop social media monitoring for a specific rule"""
+    try:
+        await db.social_monitoring_rules.update_one(
+            {"id": rule_id},
+            {"$set": {"is_active": False}}
+        )
+        
+        return {"message": "Social monitoring stopped successfully"}
+        
+    except Exception as e:
+        logger.error(f"Stop monitoring error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to stop monitoring")
+
+@app.get("/api/social/mentions/{business_id}")
+async def get_social_mentions(
+    business_id: str,
+    platform: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """Get social media mentions for a business"""
+    try:
+        query = {"business_id": business_id}
+        
+        if platform:
+            query["platform"] = platform
+        if sentiment:
+            query["sentiment_label"] = sentiment
+        
+        mentions = []
+        async for mention in db.social_mentions.find(query).sort("detected_at", -1).skip(offset).limit(limit):
+            if "_id" in mention:
+                del mention["_id"]
+            mentions.append(mention)
+        
+        return {"mentions": mentions, "total": len(mentions)}
+        
+    except Exception as e:
+        logger.error(f"Get mentions error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get mentions")
+
+@app.get("/api/social/alerts/{business_id}")
+async def get_social_alerts(
+    business_id: str,
+    priority: Optional[str] = None,
+    is_read: Optional[bool] = None,
+    limit: int = 20
+):
+    """Get social media alerts for a business"""
+    try:
+        query = {"business_id": business_id}
+        
+        if priority:
+            query["priority"] = priority
+        if is_read is not None:
+            query["is_read"] = is_read
+        
+        alerts = []
+        async for alert in db.social_alerts.find(query).sort("created_at", -1).limit(limit):
+            if "_id" in alert:
+                del alert["_id"]
+            alerts.append(alert)
+        
+        return {"alerts": alerts, "total": len(alerts)}
+        
+    except Exception as e:
+        logger.error(f"Get alerts error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get alerts")
+
+@app.put("/api/social/alerts/{alert_id}/mark-read")
+async def mark_alert_read(alert_id: str):
+    """Mark an alert as read"""
+    try:
+        await db.social_alerts.update_one(
+            {"id": alert_id},
+            {"$set": {"is_read": True}}
+        )
+        
+        return {"message": "Alert marked as read"}
+        
+    except Exception as e:
+        logger.error(f"Mark alert read error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to mark alert as read")
+
+@app.get("/api/social/analytics/{business_id}")
+async def get_social_analytics(
+    business_id: str,
+    days: int = 7,
+    platform: Optional[str] = None
+):
+    """Get social media analytics for a business"""
+    try:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        match_query = {
+            "business_id": business_id,
+            "detected_at": {"$gte": start_date, "$lte": end_date}
+        }
+        
+        if platform:
+            match_query["platform"] = platform
+        
+        # Sentiment distribution
+        sentiment_pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": "$sentiment_label",
+                "count": {"$sum": 1},
+                "avg_score": {"$avg": "$sentiment_score"}
+            }}
+        ]
+        
+        sentiment_data = await db.social_mentions.aggregate(sentiment_pipeline).to_list(None)
+        
+        # Platform distribution
+        platform_pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": "$platform",
+                "count": {"$sum": 1},
+                "avg_sentiment": {"$avg": "$sentiment_score"}
+            }}
+        ]
+        
+        platform_data = await db.social_mentions.aggregate(platform_pipeline).to_list(None)
+        
+        # Time series data
+        time_pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": {
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$detected_at"}},
+                    "sentiment": "$sentiment_label"
+                },
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"_id.date": 1}}
+        ]
+        
+        time_data = await db.social_mentions.aggregate(time_pipeline).to_list(None)
+        
+        # Alert summary
+        alert_pipeline = [
+            {"$match": {
+                "business_id": business_id,
+                "created_at": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": "$priority",
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        alert_data = await db.social_alerts.aggregate(alert_pipeline).to_list(None)
+        
+        return {
+            "sentiment_distribution": sentiment_data,
+            "platform_distribution": platform_data,
+            "time_series": time_data,
+            "alert_summary": alert_data,
+            "date_range": {"start": start_date, "end": end_date}
+        }
+        
+    except Exception as e:
+        logger.error(f"Analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get analytics")
+
+@app.get("/api/news/articles")
+async def get_news_articles(
+    keywords: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0
+):
+    """Get relevant news articles"""
+    try:
+        query = {}
+        
+        if keywords:
+            keyword_list = [k.strip() for k in keywords.split(",")]
+            query["keywords"] = {"$in": keyword_list}
+        
+        articles = []
+        async for article in db.news_articles.find(query).sort("published_at", -1).skip(offset).limit(limit):
+            if "_id" in article:
+                del article["_id"]
+            articles.append(article)
+        
+        return {"articles": articles, "total": len(articles)}
+        
+    except Exception as e:
+        logger.error(f"Get news error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get news articles")
+
+@app.websocket("/api/social/live/{business_id}")
+async def social_websocket_endpoint(websocket: WebSocket, business_id: str):
+    """WebSocket endpoint for real-time social media updates"""
+    await manager.connect(websocket, business_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle incoming WebSocket messages if needed
+            
+    except WebSocketDisconnect:
+        manager.disconnect(business_id)
+
+# Background monitoring task
+async def run_social_monitoring(rule: SocialMonitoringRule):
+    """Background task to continuously monitor social media"""
+    try:
+        while rule.is_active:
+            logger.info(f"Running social monitoring for business: {rule.business_name}")
+            
+            all_mentions = []
+            
+            # Monitor Twitter
+            if "twitter" in rule.platforms:
+                twitter_mentions = await monitor_twitter(rule.keywords, rule.business_id, rule.business_name)
+                all_mentions.extend(twitter_mentions)
+            
+            # Monitor Facebook
+            if "facebook" in rule.platforms:
+                facebook_mentions = await monitor_facebook(rule.keywords, rule.business_id, rule.business_name)
+                all_mentions.extend(facebook_mentions)
+            
+            # Monitor News
+            if "news" in rule.platforms:
+                news_articles = await monitor_news(rule.keywords, rule.business_id, rule.business_name)
+                # Store news articles
+                for article in news_articles:
+                    await db.news_articles.insert_one(article.dict())
+            
+            # Process mentions
+            for mention in all_mentions:
+                # Check if mention already exists
+                existing = await db.social_mentions.find_one({"post_id": mention.post_id, "platform": mention.platform})
+                
+                if not existing:
+                    # Store new mention
+                    await db.social_mentions.insert_one(mention.dict())
+                    
+                    # Create alert if needed
+                    alert = await create_smart_alert(mention)
+                    if alert:
+                        await db.social_alerts.insert_one(alert.dict())
+                        
+                        # Send real-time notification
+                        await manager.send_personal_message(
+                            json.dumps({
+                                "type": "new_alert",
+                                "alert": alert.dict(),
+                                "mention": mention.dict()
+                            }),
+                            rule.business_id
+                        )
+            
+            # Update last check time
+            await db.social_monitoring_rules.update_one(
+                {"id": rule.id},
+                {"$set": {"last_check": datetime.utcnow()}}
+            )
+            
+            # Wait before next check (5 minutes)
+            await asyncio.sleep(300)
+            
+            # Refresh rule status
+            updated_rule = await db.social_monitoring_rules.find_one({"id": rule.id})
+            if not updated_rule or not updated_rule.get("is_active", False):
+                break
+                
+    except Exception as e:
+        logger.error(f"Social monitoring error: {str(e)}")
+
 # API Endpoints
 
 @app.get("/api/health")
