@@ -991,6 +991,253 @@ function App() {
     </div>
   );
 
+  const SocialMonitoringPage = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">🚨 Live Social Media Monitoring</h2>
+          <p className="text-gray-600">Monitor what people are saying about your business across all social platforms in real-time</p>
+        </div>
+
+        {/* Monitoring Setup */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h3 className="text-xl font-semibold mb-4">Setup Monitoring</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="Business Name"
+              value={newMonitoringRule.business_name}
+              onChange={(e) => setNewMonitoringRule({...newMonitoringRule, business_name: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              placeholder="Keywords (comma-separated)"
+              value={newMonitoringRule.keywords}
+              onChange={(e) => setNewMonitoringRule({...newMonitoringRule, keywords: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              placeholder="@Mentions (comma-separated)"
+              value={newMonitoringRule.mentions}
+              onChange={(e) => setNewMonitoringRule({...newMonitoringRule, mentions: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              placeholder="#Hashtags (comma-separated)"
+              value={newMonitoringRule.hashtags}
+              onChange={(e) => setNewMonitoringRule({...newMonitoringRule, hashtags: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Platforms to Monitor:</p>
+            <div className="flex flex-wrap gap-2">
+              {['twitter', 'facebook', 'instagram', 'google', 'news'].map((platform) => (
+                <label key={platform} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={newMonitoringRule.platforms.includes(platform)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setNewMonitoringRule({
+                          ...newMonitoringRule,
+                          platforms: [...newMonitoringRule.platforms, platform]
+                        });
+                      } else {
+                        setNewMonitoringRule({
+                          ...newMonitoringRule,
+                          platforms: newMonitoringRule.platforms.filter(p => p !== platform)
+                        });
+                      }
+                    }}
+                    className="mr-2"
+                  />
+                  <span className="text-sm capitalize">{platform}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          
+          <button
+            onClick={startSocialMonitoring}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            🚀 Start Live Monitoring
+          </button>
+        </div>
+
+        {/* Alerts Dashboard */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaBell className="mr-2 text-red-500" />
+              Live Alerts ({socialAlerts.filter(a => !a.is_read).length})
+            </h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {socialAlerts.slice(0, 10).map((alert) => (
+                <div 
+                  key={alert.id} 
+                  className={`border-l-4 p-4 rounded ${
+                    alert.priority === 'critical' ? 'border-red-500 bg-red-50' :
+                    alert.priority === 'high' ? 'border-orange-500 bg-orange-50' :
+                    alert.priority === 'medium' ? 'border-yellow-500 bg-yellow-50' :
+                    'border-blue-500 bg-blue-50'
+                  } ${!alert.is_read ? 'ring-2 ring-opacity-50' : 'opacity-75'}`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold text-sm">{alert.title}</h4>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      alert.priority === 'critical' ? 'bg-red-200 text-red-800' :
+                      alert.priority === 'high' ? 'bg-orange-200 text-orange-800' :
+                      alert.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                      'bg-blue-200 text-blue-800'
+                    }`}>
+                      {alert.priority.toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-2">{alert.description}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span>{new Date(alert.created_at).toLocaleString()}</span>
+                    {!alert.is_read && (
+                      <button
+                        onClick={() => markAlertAsRead(alert.id)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Mark as Read
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {socialAlerts.length === 0 && (
+                <p className="text-gray-500 text-center">No alerts yet. Start monitoring to see live updates!</p>
+              )}
+            </div>
+          </div>
+
+          {/* Analytics Overview */}
+          {socialAnalytics && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-xl font-semibold mb-4">📊 Sentiment Analytics</h3>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                {socialAnalytics.sentiment_distribution?.map((item) => (
+                  <div key={item._id} className="text-center">
+                    <div className={`text-2xl font-bold ${
+                      item._id === 'positive' ? 'text-green-600' :
+                      item._id === 'negative' ? 'text-red-600' :
+                      'text-gray-600'
+                    }`}>
+                      {item.count}
+                    </div>
+                    <div className="text-sm text-gray-600 capitalize">{item._id}</div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4">
+                <h4 className="font-medium mb-2">Platform Distribution</h4>
+                {socialAnalytics.platform_distribution?.map((platform) => (
+                  <div key={platform._id} className="flex justify-between items-center mb-1">
+                    <span className="text-sm capitalize">{platform._id}</span>
+                    <span className="text-sm font-medium">{platform.count} mentions</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Live Mentions Feed */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-xl font-semibold mb-4 flex items-center">
+            <FaTwitter className="mr-2 text-blue-500" />
+            Live Mentions Feed
+          </h3>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {socialMentions.map((mention) => (
+              <div key={mention.id} className="border-b pb-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center">
+                    <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                      mention.platform === 'twitter' ? 'bg-blue-500' :
+                      mention.platform === 'facebook' ? 'bg-blue-700' :
+                      mention.platform === 'instagram' ? 'bg-pink-500' :
+                      mention.platform === 'news' ? 'bg-gray-600' :
+                      'bg-green-500'
+                    }`}></span>
+                    <span className="font-semibold text-sm capitalize">{mention.platform}</span>
+                    {mention.author_username && (
+                      <span className="text-gray-600 text-sm ml-2">@{mention.author_username}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      mention.sentiment_label === 'positive' ? 'bg-green-100 text-green-800' :
+                      mention.sentiment_label === 'negative' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {mention.sentiment_label} ({mention.sentiment_score.toFixed(2)})
+                    </span>
+                  </div>
+                </div>
+                <p className="text-gray-800 mb-2">{mention.content}</p>
+                <div className="flex justify-between items-center text-xs text-gray-500">
+                  <span>{new Date(mention.detected_at).toLocaleString()}</span>
+                  {mention.url && (
+                    <a 
+                      href={mention.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      View Original
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+            {socialMentions.length === 0 && (
+              <p className="text-gray-500 text-center">No mentions detected yet. Start monitoring to see live updates!</p>
+            )}
+          </div>
+        </div>
+
+        {/* News Articles */}
+        {newsArticles.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mt-8">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaNewspaper className="mr-2 text-gray-600" />
+              Industry News & Insights
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {newsArticles.slice(0, 6).map((article) => (
+                <div key={article.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <h4 className="font-semibold text-sm mb-2 line-clamp-2">{article.title}</h4>
+                  <p className="text-gray-600 text-xs mb-2 line-clamp-3">{article.content}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span>{article.source}</span>
+                    <a 
+                      href={article.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      Read More
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // Other page components would go here (CompetitorsPage, ReportPage, etc.)
   // For brevity, I'm showing the key new pages
 
