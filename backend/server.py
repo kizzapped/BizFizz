@@ -464,6 +464,273 @@ def identify_expansion_opportunities(business_data, location):
     
     return opportunities
 
+# Core AI Agents (from previous implementation)
+def pricewatch_agent_analysis(competitors, location):
+    """PriceWatch Agent - Advanced pricing strategy analysis"""
+    if not openai_client:
+        return generate_mock_pricing_analysis(competitors, location)
+    
+    try:
+        price_data = []
+        total_revenue = 0
+        price_levels = []
+        
+        for comp in competitors:
+            price_level = comp.get('price_level', 1)
+            avg_check = comp.get('advanced_metrics', {}).get('estimated_avg_check', 25)
+            revenue = comp.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0)
+            
+            price_data.append(f"- {comp['name']}: {'$' * price_level} (${avg_check} avg check, ${revenue:,.0f} est. monthly revenue)")
+            total_revenue += revenue
+            price_levels.append(price_level)
+        
+        avg_price_level = sum(price_levels) / len(price_levels) if price_levels else 2
+        
+        prompt = f"""
+        As an expert PriceWatch AI agent analyzing restaurant pricing in {location}:
+        
+        Market Data:
+        {chr(10).join(price_data)}
+        
+        Provide comprehensive pricing analysis in JSON format:
+        {{
+            "market_overview": "Detailed market pricing analysis",
+            "pricing_opportunities": ["specific opportunity 1", "specific opportunity 2", "specific opportunity 3"],
+            "competitive_gaps": ["gap analysis 1", "gap analysis 2"],
+            "pricing_strategies": ["strategy recommendation 1", "strategy recommendation 2"],
+            "revenue_benchmarks": "Revenue benchmarking insights"
+        }}
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.7
+        )
+        
+        result = json.loads(response.choices[0].message.content.strip())
+        return result
+        
+    except Exception as e:
+        logger.error(f"PriceWatch agent error: {str(e)}")
+        return generate_mock_pricing_analysis(competitors, location)
+
+def sentiment_agent_analysis(competitors, location):
+    """Sentiment Agent - Advanced customer sentiment analysis"""
+    if not openai_client:
+        return generate_mock_sentiment_analysis(competitors, location)
+    
+    try:
+        sentiment_data = []
+        total_reviews = 0
+        avg_rating = 0
+        
+        for comp in competitors:
+            rating = comp.get('rating', 0)
+            review_count = comp.get('review_count', 0)
+            
+            sentiment_data.append(f"- {comp['name']}: {rating}/5 stars, {review_count} reviews")
+            total_reviews += review_count
+            avg_rating += rating
+        
+        avg_rating = avg_rating / len(competitors) if competitors else 0
+        
+        prompt = f"""
+        As an expert Sentiment Analysis AI agent for restaurants in {location}:
+        
+        Customer Feedback Data:
+        {chr(10).join(sentiment_data)}
+        
+        Provide comprehensive sentiment analysis in JSON format:
+        {{
+            "sentiment_overview": "Overall market sentiment analysis",
+            "customer_pain_points": ["pain point 1", "pain point 2", "pain point 3"],
+            "satisfaction_drivers": ["driver 1", "driver 2", "driver 3"],
+            "service_gaps": ["gap 1", "gap 2"],
+            "reputation_insights": "Reputation management insights"
+        }}
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.7
+        )
+        
+        result = json.loads(response.choices[0].message.content.strip())
+        return result
+        
+    except Exception as e:
+        logger.error(f"Sentiment agent error: {str(e)}")
+        return generate_mock_sentiment_analysis(competitors, location)
+
+def crowdanalyst_agent_analysis(competitors, location):
+    """CrowdAnalyst Agent - Advanced foot traffic and customer behavior analysis"""
+    try:
+        traffic_data = []
+        total_traffic = 0
+        total_revenue = 0
+        
+        for comp in competitors:
+            daily_traffic = comp.get('advanced_metrics', {}).get('estimated_daily_covers', 50)
+            revenue = comp.get('advanced_metrics', {}).get('estimated_monthly_revenue', 0)
+            
+            traffic_data.append(f"- {comp['name']}: ~{daily_traffic} daily customers")
+            total_traffic += daily_traffic
+            total_revenue += revenue
+        
+        avg_traffic = total_traffic / len(competitors) if competitors else 0
+        
+        return {
+            "market_capacity": {
+                "total_daily_customers": int(total_traffic),
+                "average_per_restaurant": int(avg_traffic),
+                "market_saturation": f"{min(100, len(competitors) * 5)}%",
+                "revenue_per_customer": f"${(total_revenue / 30) / total_traffic:.0f}" if total_traffic > 0 else "$25"
+            },
+            "traffic_patterns": {
+                "peak_hours": ["11:30 AM - 1:30 PM (Lunch)", "6:00 PM - 8:30 PM (Dinner)"],
+                "seasonal_trends": ["Summer outdoor dining surge", "Holiday season peaks"],
+                "customer_flow": f"Market serves {int(total_traffic * 30):,} customers monthly"
+            },
+            "behavior_insights": {
+                "average_visit_duration": "45-75 minutes",
+                "party_size": "2.3 people average",
+                "repeat_visit_rate": "25-35%"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"CrowdAnalyst agent error: {str(e)}")
+        return generate_mock_traffic_analysis()
+
+def sentinel_agent_analysis(competitors, location):
+    """Sentinel Agent - Advanced competitive monitoring and threat analysis"""
+    if not openai_client:
+        return generate_mock_sentinel_analysis(competitors, location)
+    
+    try:
+        competitive_data = []
+        threat_levels = []
+        
+        for comp in competitors:
+            threat = comp.get('advanced_metrics', {}).get('competitive_threat_level', 'Medium')
+            market_strength = comp.get('advanced_metrics', {}).get('competitive_strength', 50)
+            
+            competitive_data.append(f"- {comp['name']}: {threat} threat, {market_strength:.0f}/100 market strength")
+            threat_levels.append(threat)
+        
+        high_threat_count = sum(1 for t in threat_levels if t == 'High')
+        
+        prompt = f"""
+        As an expert Sentinel AI agent monitoring competitive landscape in {location}:
+        
+        Competitive Intelligence:
+        {chr(10).join(competitive_data)}
+        
+        Provide comprehensive competitive monitoring analysis in JSON format:
+        {{
+            "threat_assessment": "Overall competitive threat analysis",
+            "emerging_trends": ["trend 1", "trend 2", "trend 3"],
+            "competitive_moves": ["recent move 1", "recent move 2"],
+            "strategic_recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
+        }}
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.7
+        )
+        
+        result = json.loads(response.choices[0].message.content.strip())
+        return result
+        
+    except Exception as e:
+        logger.error(f"Sentinel agent error: {str(e)}")
+        return generate_mock_sentinel_analysis(competitors, location)
+
+def generate_mock_pricing_analysis(competitors, location):
+    return {
+        "market_overview": f"Pricing in {location} ranges from budget ($) to premium ($$$$) with strong mid-range presence",
+        "pricing_opportunities": [
+            "Gap in premium casual dining ($25-35 range)",
+            "Limited early bird pricing strategies observed",
+            "Opportunity for dynamic weekend pricing"
+        ],
+        "competitive_gaps": [
+            "Few competitors offer value lunch pricing",
+            "Premium brunch market underserved"
+        ],
+        "pricing_strategies": [
+            "Consider tiered pricing for different meal periods",
+            "Implement loyalty program with pricing benefits"
+        ],
+        "revenue_benchmarks": "Top performers achieve $15,000-30,000 monthly revenue per location"
+    }
+
+def generate_mock_sentiment_analysis(competitors, location):
+    return {
+        "sentiment_overview": f"Overall positive sentiment in {location} with high expectations for service quality",
+        "customer_pain_points": [
+            "Wait times during peak hours",
+            "Parking availability concerns",
+            "Inconsistent service quality"
+        ],
+        "satisfaction_drivers": [
+            "Fresh, quality ingredients",
+            "Attentive staff service",
+            "Comfortable atmosphere"
+        ],
+        "service_gaps": [
+            "Limited vegetarian/vegan options",
+            "Inconsistent WiFi availability"
+        ],
+        "reputation_insights": "Strong correlation between staff training and customer satisfaction scores"
+    }
+
+def generate_mock_traffic_analysis():
+    return {
+        "market_capacity": {
+            "total_daily_customers": 2500,
+            "average_per_restaurant": 125,
+            "market_saturation": "75%",
+            "revenue_per_customer": "$32"
+        },
+        "traffic_patterns": {
+            "peak_hours": ["11:30 AM - 1:30 PM", "6:00 PM - 8:30 PM"],
+            "seasonal_trends": ["Summer outdoor dining surge", "Holiday season peaks"],
+            "customer_flow": "Market serves 75,000 customers monthly"
+        },
+        "behavior_insights": {
+            "average_visit_duration": "45-75 minutes",
+            "party_size": "2.3 people average",
+            "repeat_visit_rate": "30%"
+        }
+    }
+
+def generate_mock_sentinel_analysis(competitors, location):
+    return {
+        "threat_assessment": f"Moderate to high competitive pressure in {location} with established players",
+        "emerging_trends": [
+            "Increased focus on sustainable practices",
+            "Technology adoption for ordering and payments",
+            "Social media marketing intensification"
+        ],
+        "competitive_moves": [
+            "Menu diversification to include health-conscious options",
+            "Enhanced delivery and takeout services"
+        ],
+        "strategic_recommendations": [
+            "Differentiate through unique dining experience",
+            "Invest in technology integration",
+            "Build strong local community relationships"
+        ]
+    }
+
 # Advanced AI Agents
 def menuminer_agent_analysis(competitors, location):
     """MenuMiner Agent - Advanced menu and pricing analysis"""
