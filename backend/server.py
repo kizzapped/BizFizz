@@ -252,6 +252,77 @@ class PaymentTransaction(BaseModel):
     completed_at: Optional[datetime] = None
 
 # Subscription packages
+class SocialMention(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    platform: str  # twitter, facebook, instagram, google, news
+    post_id: str
+    content: str
+    author_username: Optional[str] = None
+    author_name: Optional[str] = None
+    sentiment_score: float = Field(default=0.0)
+    sentiment_label: str = Field(default="neutral")  # positive, negative, neutral
+    business_id: Optional[str] = None
+    business_name: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
+    url: Optional[str] = None
+    published_at: datetime
+    detected_at: datetime = Field(default_factory=datetime.utcnow)
+    is_alert_sent: bool = Field(default=False)
+    engagement_metrics: Dict[str, int] = Field(default_factory=dict)  # likes, shares, etc.
+
+class SocialMonitoringRule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_id: str
+    business_name: str
+    keywords: List[str] = Field(default_factory=list)
+    mentions: List[str] = Field(default_factory=list)  # @username mentions
+    hashtags: List[str] = Field(default_factory=list)
+    platforms: List[str] = Field(default_factory=list)  # which platforms to monitor
+    alert_settings: Dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_check: Optional[datetime] = None
+
+class SocialAlert(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_id: str
+    mention_id: str
+    alert_type: str  # sentiment_negative, high_engagement, crisis, opportunity
+    priority: str = Field(default="medium")  # low, medium, high, critical
+    title: str
+    description: str
+    suggested_actions: List[str] = Field(default_factory=list)
+    is_read: bool = Field(default=False)
+    is_responded: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class NewsArticle(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    content: str
+    summary: Optional[str] = None
+    source: str
+    author: Optional[str] = None
+    published_at: datetime
+    url: str
+    relevance_score: float = Field(default=0.0)
+    keywords: List[str] = Field(default_factory=list)
+    industry_tags: List[str] = Field(default_factory=list)
+    business_impact: str = Field(default="neutral")  # positive, negative, neutral
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PaymentTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    transaction_type: str  # subscription, advertisement, credits
+    amount: float
+    currency: str = Field(default="usd")
+    stripe_session_id: Optional[str] = None
+    payment_status: str = Field(default="pending")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
 SUBSCRIPTION_PACKAGES = {
     "starter": {"price": 0.0, "credits": 10, "features": ["Basic reports", "5 competitors", "Email support"]},
     "professional": {"price": 149.0, "credits": 500, "features": ["Unlimited reports", "25 competitors", "Advanced analytics", "Priority support"]},
