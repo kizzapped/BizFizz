@@ -29,7 +29,7 @@ class BizFizzAPITester(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             data = response.json()
             self.assertEqual(data["status"], "healthy")
-            self.assertEqual(data["service"], "BizFizz API")
+            self.assertEqual(data["service"], "BizFizz Advanced Competitive Intelligence Platform")
             
             # Check API integrations
             self.assertIn("integrations", data)
@@ -38,11 +38,20 @@ class BizFizzAPITester(unittest.TestCase):
             self.assertIn("openai", data["integrations"])
             self.assertIn("yelp", data["integrations"])
             
+            # Check for AI agents
+            self.assertIn("features", data)
+            self.assertIn("ai_agents", data["features"])
+            ai_agents = data["features"]["ai_agents"]
+            expected_agents = ["PriceWatch", "Sentiment", "CrowdAnalyst", "Sentinel", "Intelligence Synthesizer"]
+            for agent in expected_agents:
+                self.assertIn(agent, ai_agents, f"AI agent {agent} not found in health check response")
+            
             # Store integration status for later tests
             self.api_integrations = data["integrations"]
             
             print(f"✅ Health check passed - Status: {response.status_code}")
             print(f"✅ API Integrations: Google Maps: {data['integrations']['google_maps']}, OpenAI: {data['integrations']['openai']}, Yelp: {data['integrations']['yelp']}")
+            print(f"✅ AI Agents: {', '.join(ai_agents)}")
             self.tests_passed += 1
         except Exception as e:
             print(f"❌ Health check failed - Error: {str(e)}")
