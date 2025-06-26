@@ -868,7 +868,7 @@ function App() {
           </div>
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="flex items-center">
-              <FaTrendingUp className="text-purple-500 text-2xl mr-3" />
+              <FaChartLine className="text-purple-500 text-2xl mr-3" />
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">This Month</h3>
                 <p className="text-3xl font-bold text-purple-600">{reports.length}</p>
