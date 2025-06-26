@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
-import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaChartLine, FaShieldAlt, FaBrain, FaRocket, FaCog, FaLightbulb, FaTarget, FaTrendingUp, FaUserTie, FaIndustry, FaChartPie, FaMagic, FaGem, FaCrown, FaComments, FaStore, FaHeart, FaCreditCard, FaCheck, FaEnvelope, FaImage, FaBell, FaFilter, FaSort } from 'react-icons/fa';
+import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaChartLine, FaShieldAlt, FaBrain, FaRocket, FaCog, FaLightbulb, FaTarget, FaTrendingUp, FaUserTie, FaIndustry, FaChartPie, FaMagic, FaGem, FaCrown, FaComments, FaStore, FaHeart, FaCreditCard, FaCheck, FaEnvelope, FaImage, FaBell, FaFilter, FaSort, FaNewspaper, FaTwitter } from 'react-icons/fa';
 import './App.css';
 
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
