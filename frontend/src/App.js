@@ -296,6 +296,69 @@ function App() {
     }
   };
 
+  const startSocialMonitoring = async () => {
+    try {
+      if (!currentUser || !newMonitoringRule.business_name || !newMonitoringRule.keywords) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      const rule = {
+        business_id: currentUser.id,
+        business_name: newMonitoringRule.business_name,
+        keywords: newMonitoringRule.keywords.split(',').map(k => k.trim()),
+        mentions: newMonitoringRule.mentions.split(',').map(m => m.trim()).filter(m => m),
+        hashtags: newMonitoringRule.hashtags.split(',').map(h => h.trim()).filter(h => h),
+        platforms: newMonitoringRule.platforms,
+        alert_settings: {
+          negative_sentiment_threshold: -0.5,
+          high_engagement_threshold: 100,
+          email_alerts: true,
+          realtime_alerts: true
+        },
+        is_active: true
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/social/monitoring/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(rule),
+      });
+      
+      if (response.ok) {
+        alert('Social media monitoring started successfully!');
+        setNewMonitoringRule({
+          business_name: '',
+          keywords: '',
+          mentions: '',
+          hashtags: '',
+          platforms: ['twitter', 'facebook', 'news']
+        });
+        fetchSocialMentions();
+        fetchSocialAlerts();
+      }
+    } catch (error) {
+      console.error('Error starting social monitoring:', error);
+      alert('Error starting social monitoring');
+    }
+  };
+
+  const markAlertAsRead = async (alertId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/social/alerts/${alertId}/mark-read`, {
+        method: 'PUT',
+      });
+      
+      if (response.ok) {
+        fetchSocialAlerts();
+      }
+    } catch (error) {
+      console.error('Error marking alert as read:', error);
+    }
+  };
+
   const toggleCompetitorSelection = (competitorId) => {
     setSelectedCompetitors(prev => 
       prev.includes(competitorId)
