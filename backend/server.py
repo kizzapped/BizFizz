@@ -335,6 +335,278 @@ ADVERTISING_PACKAGES = {
     "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
 }
 
+# Social Media Monitoring Functions
+def analyze_sentiment(text: str) -> Dict[str, float]:
+    """Enhanced sentiment analysis using OpenAI and TextBlob"""
+    try:
+        # Basic TextBlob analysis
+        blob = TextBlob(text)
+        textblob_score = blob.sentiment.polarity
+        
+        # Enhanced OpenAI analysis if available
+        if openai_client:
+            try:
+                response = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "Analyze sentiment of the following text. Return a JSON with sentiment_score (-1 to 1) and sentiment_label (positive/negative/neutral). Be precise and consider context."},
+                        {"role": "user", "content": text}
+                    ],
+                    max_tokens=100,
+                    temperature=0.1
+                )
+                
+                ai_analysis = json.loads(response.choices[0].message.content.strip())
+                return {
+                    "sentiment_score": ai_analysis.get("sentiment_score", textblob_score),
+                    "sentiment_label": ai_analysis.get("sentiment_label", "neutral"),
+                    "confidence": 0.9,
+                    "method": "openai_enhanced"
+                }
+            except Exception as e:
+                logger.error(f"OpenAI sentiment analysis failed: {e}")
+        
+        # Fallback to TextBlob
+        sentiment_label = "positive" if textblob_score > 0.1 else "negative" if textblob_score < -0.1 else "neutral"
+        return {
+            "sentiment_score": textblob_score,
+            "sentiment_label": sentiment_label,
+            "confidence": 0.7,
+            "method": "textblob"
+        }
+        
+    except Exception as e:
+        logger.error(f"Sentiment analysis failed: {e}")
+        return {"sentiment_score": 0.0, "sentiment_label": "neutral", "confidence": 0.0, "method": "error"}
+
+async def monitor_twitter(keywords: List[str], business_id: str, business_name: str):
+    """Monitor Twitter for mentions and keywords"""
+    if not twitter_client:
+        logger.warning("Twitter client not initialized")
+        return []
+    
+    try:
+        mentions = []
+        
+        # Search for each keyword
+        for keyword in keywords:
+            query = f'"{keyword}" OR "{business_name}" -is:retweet'
+            
+            tweets = twitter_client.search_recent_tweets(
+                query=query,
+                max_results=10,
+                expansions=["author_id"],
+                tweet_fields=["created_at", "public_metrics", "context_annotations"],
+                user_fields=["username", "public_metrics"]
+            )
+            
+            if tweets.data:
+                for tweet in tweets.data:
+                    # Analyze sentiment
+                    sentiment = analyze_sentiment(tweet.text)
+                    
+                    # Extract author info
+                    author_username = "unknown"
+                    if tweets.includes and tweets.includes.get("users"):
+                        for user in tweets.includes["users"]:
+                            if user.id == tweet.author_id:
+                                author_username = user.username
+                                break
+                    
+                    mention = SocialMention(
+                        platform="twitter",
+                        post_id=str(tweet.id),
+                        content=tweet.text,
+                        author_username=author_username,
+                        sentiment_score=sentiment["sentiment_score"],
+                        sentiment_label=sentiment["sentiment_label"],
+                        business_id=business_id,
+                        business_name=business_name,
+                        keywords=[keyword],
+                        url=f"https://twitter.com/{author_username}/status/{tweet.id}",
+                        published_at=tweet.created_at,
+                        engagement_metrics=tweet.public_metrics or {}
+                    )
+                    
+                    mentions.append(mention)
+        
+        return mentions
+        
+    except Exception as e:
+        logger.error(f"Twitter monitoring error: {e}")
+        return []
+
+async def monitor_facebook(keywords: List[str], business_id: str, business_name: str):
+    """Monitor Facebook for business mentions"""
+    if not FACEBOOK_APP_ID:
+        logger.warning("Facebook credentials not configured")
+        return []
+    
+    try:
+        mentions = []
+        
+        # Facebook Graph API search (simplified)
+        async with httpx.AsyncClient() as client:
+            for keyword in keywords:
+                # Note: This is a simplified implementation
+                # Real implementation would need proper OAuth flow and permissions
+                url = f"https://graph.facebook.com/v18.0/search"
+                params = {
+                    "q": keyword,
+                    "type": "post",
+                    "access_token": f"{FACEBOOK_APP_ID}|{FACEBOOK_APP_SECRET}"  # App access token
+                }
+                
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    for post in data.get("data", []):
+                        sentiment = analyze_sentiment(post.get("message", ""))
+                        
+                        mention = SocialMention(
+                            platform="facebook",
+                            post_id=post.get("id", ""),
+                            content=post.get("message", ""),
+                            sentiment_score=sentiment["sentiment_score"],
+                            sentiment_label=sentiment["sentiment_label"],
+                            business_id=business_id,
+                            business_name=business_name,
+                            keywords=[keyword],
+                            url=f"https://facebook.com/{post.get('id', '')}",
+                            published_at=datetime.fromisoformat(post.get("created_time", "").replace("Z", "+00:00")) if post.get("created_time") else datetime.utcnow()
+                        )
+                        
+                        mentions.append(mention)
+        
+        return mentions
+        
+    except Exception as e:
+        logger.error(f"Facebook monitoring error: {e}")
+        return []
+
+async def monitor_news(keywords: List[str], business_id: str, business_name: str):
+    """Monitor news sources for industry and business mentions"""
+    if not NEWS_API_KEY:
+        logger.warning("News API key not configured")
+        return []
+    
+    try:
+        articles = []
+        
+        async with httpx.AsyncClient() as client:
+            for keyword in keywords:
+                # Search general news
+                url = "https://newsapi.org/v2/everything"
+                params = {
+                    "q": f'"{keyword}" AND restaurant',
+                    "sortBy": "publishedAt",
+                    "pageSize": 5,
+                    "language": "en",
+                    "apiKey": NEWS_API_KEY
+                }
+                
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    for article in data.get("articles", []):
+                        # Analyze business impact
+                        content = f"{article.get('title', '')} {article.get('description', '')}"
+                        sentiment = analyze_sentiment(content)
+                        
+                        news_article = NewsArticle(
+                            title=article.get("title", ""),
+                            content=article.get("description", ""),
+                            source=article.get("source", {}).get("name", ""),
+                            author=article.get("author"),
+                            published_at=datetime.fromisoformat(article.get("publishedAt", "").replace("Z", "+00:00")) if article.get("publishedAt") else datetime.utcnow(),
+                            url=article.get("url", ""),
+                            relevance_score=0.8,  # Calculate based on keyword matches
+                            keywords=[keyword],
+                            industry_tags=["restaurant", "food"],
+                            business_impact=sentiment["sentiment_label"]
+                        )
+                        
+                        articles.append(news_article)
+        
+        return articles
+        
+    except Exception as e:
+        logger.error(f"News monitoring error: {e}")
+        return []
+
+async def create_smart_alert(mention: SocialMention) -> Optional[SocialAlert]:
+    """Create intelligent alerts based on mention characteristics"""
+    try:
+        alert_type = "neutral"
+        priority = "low"
+        suggested_actions = []
+        
+        # Determine alert type and priority
+        if mention.sentiment_score < -0.5:
+            alert_type = "sentiment_negative"
+            priority = "high" if mention.sentiment_score < -0.8 else "medium"
+            suggested_actions = [
+                "Respond promptly to address concerns",
+                "Investigate the issue mentioned",
+                "Offer to resolve the problem privately",
+                "Monitor for additional negative mentions"
+            ]
+        elif mention.sentiment_score > 0.5:
+            alert_type = "opportunity"
+            priority = "medium"
+            suggested_actions = [
+                "Thank the customer for positive feedback",
+                "Share the positive review on your channels",
+                "Engage with the customer to build loyalty",
+                "Use feedback for marketing testimonials"
+            ]
+        
+        # Check engagement metrics for high impact
+        if mention.engagement_metrics:
+            total_engagement = sum(mention.engagement_metrics.values())
+            if total_engagement > 100:  # High engagement threshold
+                alert_type = "high_engagement"
+                priority = "high"
+                suggested_actions.insert(0, "High visibility content - immediate attention required")
+        
+        # Crisis detection
+        if mention.sentiment_score < -0.8 and any(word in mention.content.lower() for word in ["terrible", "worst", "awful", "disgusting", "never again"]):
+            alert_type = "crisis"
+            priority = "critical"
+            suggested_actions = [
+                "URGENT: Immediate response required",
+                "Contact customer directly",
+                "Escalate to management",
+                "Prepare public response strategy"
+            ]
+        
+        if priority in ["medium", "high", "critical"]:
+            alert = SocialAlert(
+                business_id=mention.business_id,
+                mention_id=mention.id,
+                alert_type=alert_type,
+                priority=priority,
+                title=f"{alert_type.replace('_', ' ').title()} Alert - {mention.platform.title()}",
+                description=f"Detected {alert_type.replace('_', ' ')} mention on {mention.platform}: {mention.content[:100]}...",
+                suggested_actions=suggested_actions,
+                metadata={
+                    "platform": mention.platform,
+                    "sentiment_score": mention.sentiment_score,
+                    "engagement": mention.engagement_metrics,
+                    "url": mention.url
+                }
+            )
+            
+            return alert
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Alert creation error: {e}")
+        return None
+
 # Enhanced Yelp Business Search (from previous implementation)
 def search_yelp_businesses_advanced(location, radius, business_type="restaurant"):
     """Enhanced Yelp search with comprehensive data collection"""
