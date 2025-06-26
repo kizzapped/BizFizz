@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaTrendingUp, FaShieldAlt, FaBrain } from 'react-icons/fa';
+import { FaSearch, FaChartBar, FaUsers, FaDollarSign, FaStar, FaMapMarkerAlt, FaPhone, FaGlobe, FaArrowLeft, FaDownload, FaPrint, FaEye, FaBuilding, FaChartLine, FaShieldAlt, FaBrain } from 'react-icons/fa';
 import './App.css';
 
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
