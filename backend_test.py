@@ -8,7 +8,7 @@ class BizFizzAPITester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(BizFizzAPITester, self).__init__(*args, **kwargs)
         # Get the backend URL from the frontend .env file
-        self.base_url = "https://090f1bbb-1ae7-49b3-b27a-6fd8915a0f58.preview.emergentagent.com"
+        self.base_url = "https://32969b86-898a-4616-9a3f-d03a79d2efff.preview.emergentagent.com"
         self.tests_run = 0
         self.tests_passed = 0
         self.competitor_ids = []
