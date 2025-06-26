@@ -1082,13 +1082,21 @@ async def health_check():
             "consumer_marketplace": True,
             "payment_processing": bool(stripe_checkout),
             "real_time_messaging": True,
-            "advertising_platform": True
+            "advertising_platform": True,
+            "social_media_monitoring": True,
+            "news_monitoring": bool(NEWS_API_KEY),
+            "sentiment_analysis": True
         },
         "integrations": {
             "google_maps": bool(GOOGLE_MAPS_API_KEY),
             "openai": bool(OPENAI_API_KEY),
             "yelp": bool(YELP_API_KEY),
-            "stripe": bool(stripe_checkout)
+            "stripe": bool(stripe_checkout),
+            "twitter": bool(twitter_client),
+            "facebook": bool(FACEBOOK_APP_ID),
+            "news_api": bool(NEWS_API_KEY),
+            "twilio": bool(TWILIO_ACCOUNT_SID),
+            "sendgrid": bool(SENDGRID_API_KEY)
         }
     }
 
