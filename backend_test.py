@@ -344,6 +344,74 @@ class BizFizzAPITester(unittest.TestCase):
         print(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
         return self.tests_passed == self.tests_run
 
+    def test_08_comprehensive_report(self):
+        """Test the generate comprehensive report endpoint"""
+        print(f"\n🔍 Testing generate comprehensive report endpoint...")
+        
+        # Make sure we have competitor IDs
+        if not self.competitor_ids:
+            self.test_02_search_competitors()
+        
+        try:
+            # Use the first three competitor IDs
+            test_ids = self.competitor_ids[:3]
+            
+            payload = {
+                "competitor_ids": test_ids,
+                "location": self.location
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate-comprehensive-report",
+                json=payload
+            )
+            
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            
+            # Validate response structure
+            self.assertIn("id", data)
+            self.assertIn("location", data)
+            self.assertIn("competitors", data)
+            self.assertIn("report_date", data)
+            
+            # Check for AI agent analyses
+            self.assertIn("pricewatch_analysis", data)
+            self.assertIn("sentiment_analysis", data)
+            self.assertIn("crowd_analysis", data)
+            self.assertIn("sentinel_analysis", data)
+            self.assertIn("market_synthesis", data)
+            
+            # Validate PriceWatch analysis
+            self.assertIn("market_overview", data["pricewatch_analysis"])
+            self.assertIn("pricing_opportunities", data["pricewatch_analysis"])
+            
+            # Validate Sentiment analysis
+            self.assertIn("sentiment_overview", data["sentiment_analysis"])
+            self.assertIn("customer_pain_points", data["sentiment_analysis"])
+            
+            # Validate CrowdAnalyst analysis
+            self.assertIn("market_capacity", data["crowd_analysis"])
+            self.assertIn("traffic_patterns", data["crowd_analysis"])
+            
+            # Validate Sentinel analysis
+            self.assertIn("threat_assessment", data["sentinel_analysis"])
+            self.assertIn("emerging_trends", data["sentinel_analysis"])
+            
+            # Validate Intelligence Synthesizer
+            self.assertIn("executive_summary", data["market_synthesis"])
+            self.assertIn("strategic_opportunities", data["market_synthesis"])
+            
+            # Store comprehensive report ID for later tests
+            self.comprehensive_report_id = data["id"]
+            
+            print(f"✅ Generate comprehensive report passed - Report ID: {data['id']}")
+            print(f"  Executive Summary: {data['executive_summary'][:100]}...")
+            self.tests_passed += 1
+        except Exception as e:
+            print(f"❌ Generate comprehensive report failed - Error: {str(e)}")
+            raise
+
 def run_tests():
     # Create test suite
     suite = unittest.TestSuite()
@@ -357,6 +425,7 @@ def run_tests():
     suite.addTest(BizFizzAPITester('test_05_get_reports'))
     suite.addTest(BizFizzAPITester('test_06_subscription_tiers'))
     suite.addTest(BizFizzAPITester('test_07_error_handling'))
+    suite.addTest(BizFizzAPITester('test_08_comprehensive_report'))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
