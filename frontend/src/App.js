@@ -2856,6 +2856,8 @@ function App() {
         return <MarketplacePage />;
       case 'reservations':
         return <OpenTableReservationsPage />;
+      case 'corby':
+        return <CorbyVoiceAssistant />;
       case 'pricing':
         return <PricingPage />;
       case 'messages':
