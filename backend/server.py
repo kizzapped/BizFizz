@@ -480,9 +480,38 @@ class NewsArticle(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     industry_tags: List[str] = Field(default_factory=list)
     business_impact: str = Field(default="neutral")  # positive, negative, neutral
+class VoiceCommand(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    command_text: str
+    intent: str  # restaurant_search, make_reservation, check_availability, general_query
+    entities: Dict[str, Any] = Field(default_factory=dict)  # cuisine, location, date, time, etc.
+    response_text: str
+    action_taken: Optional[str] = None
+    was_successful: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    confidence_score: float = Field(default=0.0)
 
-class PaymentTransaction(BaseModel):
+class CorbySession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    conversation_history: List[Dict[str, str]] = Field(default_factory=list)
+    context: Dict[str, Any] = Field(default_factory=dict)  # Current search, booking in progress, etc.
+    is_active: bool = Field(default=True)
+    last_interaction: datetime = Field(default_factory=datetime.utcnow)
+    user_preferences: Dict[str, Any] = Field(default_factory=dict)  # cuisine preferences, location, etc.
+
+class CorbyResponse(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    user_input: str
+    corby_response: str
+    intent_detected: str
+    entities_extracted: Dict[str, Any] = Field(default_factory=dict)
+    action_performed: Optional[str] = None
+    data_returned: Optional[Dict[str, Any]] = None
+    voice_enabled: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     transaction_type: str  # subscription, advertisement, credits
