@@ -110,14 +110,8 @@ if OPENAI_API_KEY:
         logger.error(f"Failed to initialize OpenAI client: {str(e)}")
         openai_client = None
 
-# Initialize Stripe client
+# Initialize Stripe client (temporarily disabled)
 stripe_checkout = None
-
-#     try:
-#         stripe_checkout = StripeCheckout(api_key=STRIPE_SECRET_KEY)
-#     except Exception as e:
-#         logger.error(f"Failed to initialize Stripe client: {str(e)}")
-#         stripe_checkout = None
 
 # Initialize Twitter client
 twitter_client = None
