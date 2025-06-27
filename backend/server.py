@@ -546,6 +546,521 @@ ADVERTISING_PACKAGES = {
     "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
 }
 
+# Corby Voice Assistant AI Functions
+
+async def process_voice_command(user_id: str, command_text: str, session_id: Optional[str] = None):
+    """Process voice command through Corby AI assistant"""
+    try:
+        # Get or create conversation session
+        if not session_id:
+            session = CorbySession(
+                user_id=user_id,
+                context={"location": "unknown"}
+            )
+            await db.corby_sessions.insert_one(session.dict())
+            session_id = session.id
+        else:
+            session_data = await db.corby_sessions.find_one({"id": session_id})
+            session = CorbySession(**session_data) if session_data else None
+            if not session:
+                return {"error": "Session not found"}
+
+        # Analyze command with OpenAI
+        intent_analysis = await analyze_voice_intent(command_text, session.conversation_history)
+        
+        # Extract entities and intent
+        intent = intent_analysis.get("intent", "general_query")
+        entities = intent_analysis.get("entities", {})
+        
+        # Generate appropriate response based on intent
+        corby_response = await generate_corby_response(intent, entities, command_text, session)
+        
+        # Update conversation history
+        session.conversation_history.append({
+            "user": command_text,
+            "corby": corby_response["response_text"],
+            "timestamp": datetime.utcnow().isoformat(),
+            "intent": intent
+        })
+        
+        # Keep only last 10 exchanges to manage context size
+        if len(session.conversation_history) > 10:
+            session.conversation_history = session.conversation_history[-10:]
+        
+        # Update session
+        session.last_interaction = datetime.utcnow()
+        session.context.update(corby_response.get("context_updates", {}))
+        
+        await db.corby_sessions.replace_one(
+            {"id": session_id},
+            session.dict()
+        )
+        
+        # Save voice command record
+        voice_command = VoiceCommand(
+            user_id=user_id,
+            command_text=command_text,
+            intent=intent,
+            entities=entities,
+            response_text=corby_response["response_text"],
+            action_taken=corby_response.get("action_taken"),
+            was_successful=corby_response.get("was_successful", False),
+            confidence_score=intent_analysis.get("confidence", 0.8)
+        )
+        
+        await db.voice_commands.insert_one(voice_command.dict())
+        
+        return {
+            "session_id": session_id,
+            "response_text": corby_response["response_text"],
+            "intent": intent,
+            "entities": entities,
+            "action_taken": corby_response.get("action_taken"),
+            "data": corby_response.get("data"),
+            "voice_enabled": True,
+            "confidence": intent_analysis.get("confidence", 0.8)
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice command processing error: {e}")
+        return {
+            "response_text": "I'm sorry, I'm having trouble understanding that right now. Could you try rephrasing your request?",
+            "intent": "error",
+            "voice_enabled": True
+        }
+
+async def analyze_voice_intent(command_text: str, conversation_history: List[Dict[str, str]]):
+    """Analyze voice command to determine intent and extract entities"""
+    try:
+        if not openai_client:
+            # Fallback intent detection without OpenAI
+            return await fallback_intent_detection(command_text)
+        
+        # Build context from conversation history
+        context = ""
+        if conversation_history:
+            recent_context = conversation_history[-3:]  # Last 3 exchanges
+            context = "\n".join([f"User: {h['user']}\nCorby: {h['corby']}" for h in recent_context])
+        
+        intent_prompt = f"""
+You are Corby, a helpful AI assistant for BizFizz restaurant platform. Analyze this voice command and return a JSON response.
+
+Conversation Context:
+{context}
+
+Current User Command: "{command_text}"
+
+Determine the intent and extract entities. Available intents:
+- restaurant_search: User wants to find restaurants
+- make_reservation: User wants to book a table
+- check_availability: User wants to check if tables are available
+- modify_reservation: User wants to change/cancel existing booking
+- get_recommendations: User wants personalized suggestions
+- check_weather: User asks about weather (for outdoor dining)
+- general_query: General questions about restaurants/food
+- greeting: Hello, hi, how are you
+- help: User needs assistance
+
+Return JSON format:
+{{
+  "intent": "detected_intent",
+  "entities": {{
+    "cuisine": "italian/chinese/etc",
+    "location": "near me/specific address",
+    "date": "today/tomorrow/specific date",
+    "time": "lunch/dinner/7pm/etc", 
+    "party_size": "number",
+    "restaurant_name": "specific restaurant",
+    "dietary_restrictions": "vegetarian/gluten-free/etc"
+  }},
+  "confidence": 0.95
+}}
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert intent classifier for restaurant voice commands. Always return valid JSON."},
+                {"role": "user", "content": intent_prompt}
+            ],
+            max_tokens=300,
+            temperature=0.1
+        )
+        
+        result = json.loads(response.choices[0].message.content.strip())
+        return result
+        
+    except Exception as e:
+        logger.error(f"Intent analysis error: {e}")
+        return await fallback_intent_detection(command_text)
+
+async def fallback_intent_detection(command_text: str):
+    """Fallback intent detection using keyword matching"""
+    command_lower = command_text.lower()
+    
+    # Define keyword patterns
+    if any(word in command_lower for word in ["find", "search", "restaurant", "food", "eat", "hungry"]):
+        intent = "restaurant_search"
+    elif any(word in command_lower for word in ["book", "reserve", "table", "reservation"]):
+        intent = "make_reservation"
+    elif any(word in command_lower for word in ["available", "free", "open"]):
+        intent = "check_availability"
+    elif any(word in command_lower for word in ["hello", "hi", "hey", "good morning", "good evening"]):
+        intent = "greeting"
+    elif any(word in command_lower for word in ["help", "assist", "how to", "what can"]):
+        intent = "help"
+    elif any(word in command_lower for word in ["recommend", "suggest", "best", "popular"]):
+        intent = "get_recommendations"
+    else:
+        intent = "general_query"
+    
+    # Extract basic entities
+    entities = {}
+    
+    # Cuisine detection
+    cuisines = ["italian", "chinese", "mexican", "indian", "japanese", "thai", "french", "american", "pizza", "sushi"]
+    for cuisine in cuisines:
+        if cuisine in command_lower:
+            entities["cuisine"] = cuisine
+            break
+    
+    # Location detection
+    if "near me" in command_lower or "nearby" in command_lower:
+        entities["location"] = "near me"
+    
+    # Time detection
+    if any(word in command_lower for word in ["lunch", "dinner", "breakfast"]):
+        entities["time"] = next(word for word in ["lunch", "dinner", "breakfast"] if word in command_lower)
+    
+    # Party size detection
+    numbers = ["1", "2", "3", "4", "5", "6", "7", "8", "one", "two", "three", "four", "five", "six", "seven", "eight"]
+    for num in numbers:
+        if f"{num} people" in command_lower or f"party of {num}" in command_lower:
+            entities["party_size"] = num
+            break
+    
+    return {
+        "intent": intent,
+        "entities": entities,
+        "confidence": 0.7
+    }
+
+async def generate_corby_response(intent: str, entities: Dict[str, Any], command_text: str, session: CorbySession):
+    """Generate Corby's response based on intent and entities"""
+    try:
+        if intent == "greeting":
+            return {
+                "response_text": "Hello! I'm Corby, your personal restaurant assistant! I can help you find amazing restaurants, check availability, and even make reservations for you. What can I help you with today?",
+                "action_taken": None,
+                "was_successful": True
+            }
+        
+        elif intent == "help":
+            return {
+                "response_text": "I'm here to help! You can ask me things like: 'Find Italian restaurants near me', 'Book a table for 2 at 7 PM tonight', 'What are the best sushi places nearby?', or 'Check availability at Joe's Bistro for tomorrow'. Just speak naturally and I'll take care of the rest!",
+                "action_taken": None,
+                "was_successful": True
+            }
+        
+        elif intent == "restaurant_search":
+            return await handle_restaurant_search(entities, session)
+        
+        elif intent == "make_reservation":
+            return await handle_reservation_request(entities, session)
+        
+        elif intent == "check_availability":
+            return await handle_availability_check(entities, session)
+        
+        elif intent == "get_recommendations":
+            return await handle_recommendations(entities, session)
+        
+        else:
+            # Use OpenAI for general conversation
+            if openai_client:
+                return await generate_ai_conversation_response(command_text, session)
+            else:
+                return {
+                    "response_text": "I'm focused on helping you with restaurants! Try asking me to find restaurants, check availability, or make reservations.",
+                    "action_taken": None,
+                    "was_successful": False
+                }
+        
+    except Exception as e:
+        logger.error(f"Response generation error: {e}")
+        return {
+            "response_text": "I'm having trouble processing that request. Could you try asking in a different way?",
+            "action_taken": None,
+            "was_successful": False
+        }
+
+async def handle_restaurant_search(entities: Dict[str, Any], session: CorbySession):
+    """Handle restaurant search through voice"""
+    try:
+        # Extract search parameters
+        cuisine = entities.get("cuisine", "restaurant")
+        location = entities.get("location", "near me")
+        date = entities.get("date", datetime.now().strftime("%Y-%m-%d"))
+        time = entities.get("time", "19:00")
+        party_size = entities.get("party_size", "2")
+        
+        # Convert party size to number
+        party_size_num = 2
+        try:
+            if isinstance(party_size, str):
+                word_to_num = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+                party_size_num = word_to_num.get(party_size, int(party_size)) if party_size.isdigit() else 2
+            else:
+                party_size_num = int(party_size)
+        except:
+            party_size_num = 2
+        
+        # Search restaurants
+        restaurants = await search_restaurants_with_availability(
+            cuisine, date, time, party_size_num, location, 10.0
+        )
+        
+        if restaurants:
+            # Create a natural response
+            if len(restaurants) == 1:
+                restaurant = restaurants[0]
+                response_text = f"Great! I found {restaurant.restaurant_name}, a {restaurant.cuisine_type} restaurant. They're rated {restaurant.rating} stars and have availability at {time}. Would you like me to make a reservation for you?"
+            else:
+                top_3 = restaurants[:3]
+                restaurant_list = ", ".join([f"{r.restaurant_name} ({r.rating} stars)" for r in top_3])
+                response_text = f"I found {len(restaurants)} {cuisine} restaurants for you! The top options are: {restaurant_list}. Would you like more details about any of these, or shall I help you make a reservation?"
+            
+            # Update session context
+            context_updates = {
+                "last_search": {
+                    "restaurants": [r.dict() for r in restaurants[:5]],
+                    "search_params": {
+                        "cuisine": cuisine,
+                        "date": date,
+                        "time": time,
+                        "party_size": party_size_num
+                    }
+                }
+            }
+            
+            return {
+                "response_text": response_text,
+                "action_taken": f"searched_{len(restaurants)}_restaurants",
+                "was_successful": True,
+                "data": {"restaurants": [r.dict() for r in restaurants[:5]]},
+                "context_updates": context_updates
+            }
+        else:
+            return {
+                "response_text": f"I couldn't find any {cuisine} restaurants available at {time} for {party_size_num} people. Would you like me to try a different time or cuisine type?",
+                "action_taken": "no_restaurants_found",
+                "was_successful": False
+            }
+        
+    except Exception as e:
+        logger.error(f"Restaurant search error: {e}")
+        return {
+            "response_text": "I'm having trouble searching for restaurants right now. Please try again in a moment.",
+            "action_taken": None,
+            "was_successful": False
+        }
+
+async def handle_reservation_request(entities: Dict[str, Any], session: CorbySession):
+    """Handle reservation booking through voice"""
+    try:
+        # Check if we have a recent search in context
+        last_search = session.context.get("last_search")
+        if not last_search:
+            return {
+                "response_text": "I'd be happy to help you make a reservation! First, let me search for available restaurants. What type of cuisine are you in the mood for?",
+                "action_taken": "request_search_first",
+                "was_successful": False
+            }
+        
+        restaurants = last_search.get("restaurants", [])
+        if not restaurants:
+            return {
+                "response_text": "I don't have any restaurant options to book. Would you like me to search for restaurants first?",
+                "action_taken": "no_restaurants_in_context",
+                "was_successful": False
+            }
+        
+        # Get the first/best restaurant from search
+        restaurant = restaurants[0]
+        search_params = last_search.get("search_params", {})
+        
+        # Extract additional info from entities or use search context
+        guest_name = entities.get("guest_name", "")
+        date = entities.get("date", search_params.get("date"))
+        time = entities.get("time", search_params.get("time"))
+        party_size = entities.get("party_size", search_params.get("party_size"))
+        
+        if not guest_name:
+            return {
+                "response_text": f"I can book a table at {restaurant['restaurant_name']} for {party_size} people on {date} at {time}. What name should I put the reservation under?",
+                "action_taken": "request_guest_name",
+                "was_successful": False,
+                "context_updates": {
+                    "pending_reservation": {
+                        "restaurant": restaurant,
+                        "date": date,
+                        "time": time,
+                        "party_size": party_size
+                    }
+                }
+            }
+        
+        # Here we would need guest email and phone for a real reservation
+        # For demo purposes, we'll simulate a successful booking
+        confirmation_id = f"BZ{random.randint(1000, 9999)}"
+        
+        return {
+            "response_text": f"Perfect! I've booked your table at {restaurant['restaurant_name']} for {party_size} people on {date} at {time}. Your confirmation number is {confirmation_id}. You should receive a confirmation shortly!",
+            "action_taken": f"reservation_created_{confirmation_id}",
+            "was_successful": True,
+            "data": {
+                "reservation": {
+                    "restaurant": restaurant['restaurant_name'],
+                    "date": date,
+                    "time": time,
+                    "party_size": party_size,
+                    "confirmation": confirmation_id
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Reservation handling error: {e}")
+        return {
+            "response_text": "I'm having trouble making that reservation. Let me help you find available options instead.",
+            "action_taken": None,
+            "was_successful": False
+        }
+
+async def handle_availability_check(entities: Dict[str, Any], session: CorbySession):
+    """Handle availability checking through voice"""
+    try:
+        restaurant_name = entities.get("restaurant_name")
+        if not restaurant_name:
+            return {
+                "response_text": "Which restaurant would you like me to check availability for?",
+                "action_taken": "request_restaurant_name",
+                "was_successful": False
+            }
+        
+        date = entities.get("date", datetime.now().strftime("%Y-%m-%d"))
+        time = entities.get("time", "19:00")
+        party_size = entities.get("party_size", "2")
+        
+        # Simulate availability check
+        is_available = random.choice([True, False])
+        
+        if is_available:
+            return {
+                "response_text": f"Great news! {restaurant_name} has availability for {party_size} people at {time} on {date}. Would you like me to make a reservation for you?",
+                "action_taken": f"availability_checked_available",
+                "was_successful": True,
+                "data": {"available": True, "restaurant": restaurant_name}
+            }
+        else:
+            alternative_times = ["6:30 PM", "8:00 PM", "8:30 PM"]
+            return {
+                "response_text": f"Unfortunately, {restaurant_name} is booked at {time} on {date}. However, they have availability at {', '.join(alternative_times)}. Would any of these times work for you?",
+                "action_taken": f"availability_checked_alternative_times",
+                "was_successful": True,
+                "data": {"available": False, "alternatives": alternative_times}
+            }
+        
+    except Exception as e:
+        logger.error(f"Availability check error: {e}")
+        return {
+            "response_text": "I'm having trouble checking availability right now. Please try again in a moment.",
+            "action_taken": None,
+            "was_successful": False
+        }
+
+async def handle_recommendations(entities: Dict[str, Any], session: CorbySession):
+    """Handle restaurant recommendations through voice"""
+    try:
+        cuisine = entities.get("cuisine", "")
+        location = entities.get("location", "near you")
+        
+        # Get user preferences from session
+        user_preferences = session.user_preferences
+        preferred_cuisine = user_preferences.get("cuisine", cuisine)
+        
+        if preferred_cuisine:
+            response_text = f"Based on your preferences, I recommend trying some great {preferred_cuisine} restaurants {location}. "
+        else:
+            response_text = f"Here are some popular restaurant recommendations {location}. "
+        
+        # Mock recommendations
+        recommendations = [
+            "Bella Vista for authentic Italian with amazing pasta",
+            "Dragon Palace for fresh Chinese cuisine",
+            "The Corner Bistro for contemporary American dishes"
+        ]
+        
+        response_text += "You might enjoy: " + ", ".join(recommendations[:2]) + f". Would you like me to check availability at any of these restaurants?"
+        
+        return {
+            "response_text": response_text,
+            "action_taken": "provided_recommendations",
+            "was_successful": True,
+            "data": {"recommendations": recommendations}
+        }
+        
+    except Exception as e:
+        logger.error(f"Recommendations error: {e}")
+        return {
+            "response_text": "I'd love to give you some recommendations! What type of cuisine are you in the mood for?",
+            "action_taken": None,
+            "was_successful": False
+        }
+
+async def generate_ai_conversation_response(command_text: str, session: CorbySession):
+    """Generate conversational response using OpenAI"""
+    try:
+        context = "\n".join([f"User: {h['user']}\nCorby: {h['corby']}" for h in session.conversation_history[-3:]])
+        
+        conversation_prompt = f"""
+You are Corby, a friendly and helpful AI assistant for BizFizz restaurant platform. You help users find restaurants, make reservations, and discover great dining experiences.
+
+Context of recent conversation:
+{context}
+
+User just said: "{command_text}"
+
+Respond naturally and helpfully. If they ask about restaurants, food, or dining, be enthusiastic and helpful. If it's off-topic, gently redirect to how you can help with restaurants.
+
+Keep responses concise (1-2 sentences) and conversational.
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are Corby, a helpful restaurant assistant. Be friendly, concise, and focus on restaurant-related help."},
+                {"role": "user", "content": conversation_prompt}
+            ],
+            max_tokens=150,
+            temperature=0.7
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        return {
+            "response_text": response_text,
+            "action_taken": "ai_conversation",
+            "was_successful": True
+        }
+        
+    except Exception as e:
+        logger.error(f"AI conversation error: {e}")
+        return {
+            "response_text": "I'm here to help you with restaurants! What can I assist you with today?",
+            "action_taken": None,
+            "was_successful": True
+        }
+
 # OpenTable Integration Functions
 
 OPENTABLE_CLIENT_ID = os.environ.get('OPENTABLE_CLIENT_ID')
