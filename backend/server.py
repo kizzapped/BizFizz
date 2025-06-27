@@ -71,6 +71,7 @@ db = client.bizfizz_ultimate
 
 # API clients and configuration
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
+GOOGLE_PLACES_API_KEY = os.environ.get('GOOGLE_PLACES_API_KEY')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 YELP_API_KEY = os.environ.get('YELP_API_KEY')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_placeholder')
