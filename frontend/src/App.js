@@ -245,6 +245,188 @@ function App() {
     }
   };
 
+  // Location-based functions
+  const requestLocationPermission = async () => {
+    try {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by this browser');
+        return false;
+      }
+
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        });
+      });
+
+      const locationData = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      };
+
+      setUserLocation(locationData);
+
+      // Update backend with permission
+      if (currentUser) {
+        await fetch(`${API_BASE_URL}/api/location/permissions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            permission_granted: true,
+            location_sharing: true,
+            promotional_notifications: true,
+            sms_notifications: true,
+            push_notifications: true
+          })
+        });
+
+        setLocationPermission({
+          permission_granted: true,
+          location_sharing: true,
+          promotional_notifications: true
+        });
+
+        startLocationTracking();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Location permission error:', error);
+      alert('Location access denied. You can enable it later in settings to receive nearby restaurant offers!');
+      return false;
+    }
+  };
+
+  const startLocationTracking = () => {
+    if (!navigator.geolocation || !currentUser) return;
+
+    setIsLocationTracking(true);
+
+    const updateLocation = async () => {
+      try {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const locationData = {
+            user_id: currentUser.id,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+
+          const response = await fetch(`${API_BASE_URL}/api/location/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(locationData)
+          });
+
+          const result = await response.json();
+          
+          if (result.proximity_alerts > 0) {
+            // Show notification for nearby restaurants
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('🍽️ Special Offers Nearby!', {
+                body: `${result.proximity_alerts} restaurants near you have special offers!`,
+                icon: '/favicon.ico'
+              });
+            }
+          }
+
+          setUserLocation(locationData);
+        }, (error) => {
+          console.error('Location tracking error:', error);
+        }, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000 // 1 minute
+        });
+      } catch (error) {
+        console.error('Location update error:', error);
+      }
+    };
+
+    // Update location every 2 minutes
+    updateLocation();
+    const locationInterval = setInterval(updateLocation, 120000);
+
+    return () => clearInterval(locationInterval);
+  };
+
+  const fetchPromotionalCampaigns = async () => {
+    try {
+      if (currentUser && currentUser.user_type === 'business') {
+        const response = await fetch(`${API_BASE_URL}/api/campaigns/${currentUser.id}`);
+        const data = await response.json();
+        setPromotionalCampaigns(data.campaigns || []);
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+    }
+  };
+
+  const fetchNearbyUsers = async () => {
+    try {
+      if (currentUser && currentUser.user_type === 'business') {
+        const response = await fetch(`${API_BASE_URL}/api/location/nearby-users/${currentUser.id}?radius_miles=1`);
+        const data = await response.json();
+        setNearbyUsers(data.nearby_users || []);
+      }
+    } catch (error) {
+      console.error('Error fetching nearby users:', error);
+    }
+  };
+
+  const createPromotionalCampaign = async () => {
+    try {
+      if (!currentUser || currentUser.user_type !== 'business') {
+        alert('Only business owners can create campaigns');
+        return;
+      }
+
+      if (!newCampaign.campaign_name || !newCampaign.promo_message || !newCampaign.valid_until) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      const campaignData = {
+        business_id: currentUser.id,
+        ...newCampaign,
+        target_radius: newCampaign.target_radius * 1609.34 // Convert miles to meters
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/campaigns/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(campaignData)
+      });
+
+      if (response.ok) {
+        alert('Promotional campaign created successfully! 🎉');
+        setNewCampaign({
+          campaign_name: '',
+          promo_message: '',
+          discount_amount: '',
+          discount_type: 'percentage',
+          promo_code: '',
+          valid_until: '',
+          max_uses: 100,
+          target_radius: 1,
+          send_sms: true,
+          send_push: true
+        });
+        fetchPromotionalCampaigns();
+      } else {
+        const error = await response.json();
+        alert(`Error creating campaign: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+      alert('Error creating campaign');
+    }
+  };
+
   const registerUser = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
