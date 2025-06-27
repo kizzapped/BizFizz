@@ -135,6 +135,52 @@ if TWITTER_BEARER_TOKEN:
         logger.error(f"Failed to initialize Twitter client: {str(e)}")
         twitter_client = None
 
+# Initialize Redis for caching (optional)
+redis_client = None
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_client.ping()  # Test connection
+    logger.info("Redis cache connected successfully")
+except Exception as e:
+    logger.warning(f"Redis cache not available: {str(e)}")
+    redis_client = None
+
+# Caching decorator
+def cache_result(expiration_seconds=300):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            if not redis_client:
+                return await func(*args, **kwargs)
+            
+            # Create cache key
+            cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            
+            try:
+                # Try to get from cache
+                cached_result = redis_client.get(cache_key)
+                if cached_result:
+                    return pickle.loads(cached_result.encode('latin1'))
+            except Exception as e:
+                logger.warning(f"Cache read error: {e}")
+            
+            # Execute function
+            result = await func(*args, **kwargs)
+            
+            try:
+                # Store in cache
+                redis_client.setex(
+                    cache_key, 
+                    expiration_seconds, 
+                    pickle.dumps(result).decode('latin1')
+                )
+            except Exception as e:
+                logger.warning(f"Cache write error: {e}")
+            
+            return result
+        return wrapper
+    return decorator
+
 # Log API key status
 logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, Google Places: {bool(GOOGLE_PLACES_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}, Twitter: {bool(twitter_client)}, Facebook: {bool(FACEBOOK_APP_ID)}, News: {bool(NEWS_API_KEY)}")
 
