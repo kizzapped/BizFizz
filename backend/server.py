@@ -1385,8 +1385,8 @@ async def handle_advanced_menu_queries(command_text: str, session: CorbySession)
         
         # Dietary restrictions
         if re.search(menu_query_patterns["dietary_specific"], command_lower):
-            dietary_type = re.search(r"(vegetarian|vegan|gluten.free|kosher|halal)", command_lower).group(1)
-            return await find_dietary_restaurants(dietary_type, session)
+            atmosphere = re.search(r"(vegetarian|vegan|gluten.free|kosher|halal)", command_lower).group(1)
+            return await find_restaurants_by_atmosphere(atmosphere, session)
         
         return None  # Let other handlers process
         
