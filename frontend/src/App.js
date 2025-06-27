@@ -86,6 +86,12 @@ function App() {
     voice: null
   });
   const [showCorbyInterface, setShowCorbyInterface] = useState(false);
+  const [voiceProfile, setVoiceProfile] = useState('friendly');
+  const [availableVoiceProfiles, setAvailableVoiceProfiles] = useState({});
+  const [corbyAnalytics, setCorbyAnalytics] = useState(null);
+  const [smartRecommendations, setSmartRecommendations] = useState([]);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [voiceRecognition, setVoiceRecognition] = useState(null);
   const [newCampaign, setNewCampaign] = useState({
     campaign_name: '',
     promo_message: '',
