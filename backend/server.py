@@ -1158,6 +1158,321 @@ async def fallback_intent_detection(command_text: str):
         "confidence": 0.7
     }
 
+# Advanced Menu Query Functions
+
+async def handle_advanced_menu_queries(command_text: str, session: CorbySession):
+    """Handle advanced menu-based queries like 'restaurants with steak and seafood'"""
+    try:
+        # Enhanced menu search capabilities
+        menu_query_patterns = {
+            "menu_items": r"restaurants?.*(with|offering|serving|have)\s+(.*?)(?:\s+and\s+(.*?))?(?:\s+dishes?|\s+food)?",
+            "price_comparison": r"(?:best price|cheapest|most affordable|lowest cost).*(?:for|on)\s+(.*?)(?:\s+at|\s+in)?",
+            "dietary_specific": r"(?:vegetarian|vegan|gluten.free|kosher|halal)\s+(?:options|restaurants|food)",
+            "cuisine_combination": r"(.*?)\s+and\s+(.*?)\s+(?:restaurants?|cuisine|food)"
+        }
+        
+        import re
+        command_lower = command_text.lower()
+        
+        # Menu items search
+        menu_match = re.search(menu_query_patterns["menu_items"], command_lower)
+        if menu_match:
+            item1 = menu_match.group(2).strip()
+            item2 = menu_match.group(3).strip() if menu_match.group(3) else None
+            
+            return await search_restaurants_by_menu_items(item1, session, item2)
+        
+        # Price comparison
+        price_match = re.search(menu_query_patterns["price_comparison"], command_lower)
+        if price_match:
+            category = price_match.group(1).strip()
+            return await compare_prices_by_category(category, session)
+        
+        # Dietary restrictions
+        if re.search(menu_query_patterns["dietary_specific"], command_lower):
+            dietary_type = re.search(r"(vegetarian|vegan|gluten.free|kosher|halal)", command_lower).group(1)
+            return await find_dietary_restaurants(dietary_type, session)
+        
+        return None  # Let other handlers process
+        
+    except Exception as e:
+        logger.error(f"Advanced menu query error: {e}")
+        return None
+
+async def search_restaurants_by_menu_items(item1: str, session: CorbySession, item2: str = None):
+    """Search restaurants that serve specific menu items"""
+    try:
+        # Enhanced search with menu integration
+        if openai_client:
+            # Use AI to understand menu items and find matches
+            menu_analysis_prompt = f"""
+            Find restaurants that serve {item1}{f' and {item2}' if item2 else ''}.
+            
+            Based on typical restaurant offerings, categorize this as:
+            1. Specific dishes (e.g., "steak and seafood" = steakhouse, seafood restaurant)
+            2. Cuisine types that commonly serve these items
+            3. Restaurant categories (fine dining, casual, etc.)
+            
+            Return JSON:
+            {{
+              "cuisine_types": ["steakhouse", "seafood", "american"],
+              "restaurant_categories": ["fine dining", "casual dining"],
+              "search_terms": ["steak", "seafood", "surf and turf"],
+              "confidence": 0.95
+            }}
+            """
+            
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a restaurant menu expert. Analyze requests and suggest restaurant types."},
+                    {"role": "user", "content": menu_analysis_prompt}
+                ],
+                max_tokens=200,
+                temperature=0.1
+            )
+            
+            try:
+                analysis = json.loads(response.choices[0].message.content.strip())
+                cuisine_types = analysis.get("cuisine_types", [item1])
+            except:
+                cuisine_types = [item1]
+        else:
+            cuisine_types = [item1]
+        
+        # Search restaurants based on analyzed cuisine types
+        restaurants_found = []
+        for cuisine in cuisine_types:
+            restaurants = await search_restaurants_with_availability(
+                cuisine, 
+                datetime.now().strftime("%Y-%m-%d"), 
+                "19:00", 
+                2, 
+                session.context.get("location", "near me")
+            )
+            restaurants_found.extend(restaurants)
+        
+        # Remove duplicates and format response
+        unique_restaurants = {r.restaurant_id: r for r in restaurants_found}.values()
+        restaurant_list = list(unique_restaurants)[:5]
+        
+        if restaurant_list:
+            items_text = f"{item1} and {item2}" if item2 else item1
+            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars, {r.price_range})" for r in restaurant_list[:3]]
+            
+            response_text = f"Great choice! I found {len(restaurant_list)} restaurants serving {items_text}. Top recommendations: {', '.join(restaurant_names)}. Would you like me to check availability or get more details about any of these?"
+            
+            return {
+                "response_text": response_text,
+                "action_taken": f"menu_search_{len(restaurant_list)}_found",
+                "was_successful": True,
+                "data": {"restaurants": [r.dict() for r in restaurant_list]},
+                "context_updates": {
+                    "last_menu_search": {
+                        "items": [item1, item2] if item2 else [item1],
+                        "restaurants": [r.dict() for r in restaurant_list]
+                    }
+                }
+            }
+        else:
+            return {
+                "response_text": f"I couldn't find restaurants specifically offering {items_text} in your area right now. Would you like me to broaden the search or try different cuisine types?",
+                "action_taken": "menu_search_no_results",
+                "was_successful": False
+            }
+        
+    except Exception as e:
+        logger.error(f"Menu item search error: {e}")
+        return {
+            "response_text": f"I'm having trouble searching for {item1} restaurants right now. Let me try a general search instead.",
+            "was_successful": False
+        }
+
+async def compare_prices_by_category(category: str, session: CorbySession):
+    """Compare prices across restaurants for specific categories"""
+    try:
+        # Simulate price comparison (in production, integrate with menu APIs)
+        category_lower = category.lower()
+        
+        # Generate mock price data based on category
+        mock_price_data = {
+            "appetizers": [
+                {"restaurant": "Joe's Bistro", "price_range": "$8-15", "popular_item": "Calamari $12", "rating": 4.2},
+                {"restaurant": "Casual Corner", "price_range": "$6-12", "popular_item": "Wings $9", "rating": 4.0},
+                {"restaurant": "Upscale Eatery", "price_range": "$15-25", "popular_item": "Oysters $18", "rating": 4.5}
+            ],
+            "entrees": [
+                {"restaurant": "Family Diner", "price_range": "$12-18", "popular_item": "Burger $14", "rating": 3.8},
+                {"restaurant": "Steakhouse Prime", "price_range": "$25-45", "popular_item": "Ribeye $38", "rating": 4.6},
+                {"restaurant": "Pasta Palace", "price_range": "$16-22", "popular_item": "Linguine $18", "rating": 4.1}
+            ],
+            "desserts": [
+                {"restaurant": "Sweet Treats", "price_range": "$7-12", "popular_item": "Cheesecake $9", "rating": 4.3},
+                {"restaurant": "Bistro Downtown", "price_range": "$8-14", "popular_item": "Tiramisu $11", "rating": 4.2},
+                {"restaurant": "Corner Cafe", "price_range": "$5-10", "popular_item": "Apple Pie $7", "rating": 3.9}
+            ]
+        }
+        
+        # Find matching category
+        matching_data = None
+        for cat, data in mock_price_data.items():
+            if cat in category_lower or category_lower in cat:
+                matching_data = data
+                break
+        
+        if not matching_data:
+            matching_data = mock_price_data["appetizers"]  # Default fallback
+        
+        # Sort by price (lowest first)
+        sorted_data = sorted(matching_data, key=lambda x: int(x["price_range"].split('-')[0].replace('$', '')))
+        
+        best_value = sorted_data[0]
+        response_text = f"For {category}, the best prices are at {best_value['restaurant']} with {category} ranging {best_value['price_range']}. Their popular {best_value['popular_item']} is highly rated at {best_value['rating']} stars. Would you like me to check availability there?"
+        
+        return {
+            "response_text": response_text,
+            "action_taken": f"price_comparison_{category}",
+            "was_successful": True,
+            "data": {
+                "category": category,
+                "price_comparison": sorted_data,
+                "best_value": best_value
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Price comparison error: {e}")
+        return {
+            "response_text": f"I'm working on getting price information for {category}. In the meantime, would you like me to find restaurants in your budget range?",
+            "was_successful": False
+        }
+
+async def handle_review_requests(command_text: str, session: CorbySession):
+    """Handle requests to write or leave reviews"""
+    try:
+        command_lower = command_text.lower()
+        
+        # Extract restaurant name and review type
+        review_patterns = {
+            "leave_review": r"leave\s+(.*?)\s+(?:a\s+)?(good|great|positive|5.star|excellent|bad|negative|poor)\s+review\s+(?:for|at)\s+(.*)",
+            "write_review": r"write\s+(?:a\s+)?(good|great|positive|5.star|excellent|bad|negative|poor)\s+review\s+(?:for|about)\s+(.*)"
+        }
+        
+        import re
+        review_match = None
+        review_type = None
+        restaurant_name = None
+        
+        for pattern_name, pattern in review_patterns.items():
+            match = re.search(pattern, command_lower)
+            if match:
+                if pattern_name == "leave_review":
+                    review_type = match.group(2)
+                    restaurant_name = match.group(3)
+                else:  # write_review
+                    review_type = match.group(1)
+                    restaurant_name = match.group(2)
+                break
+        
+        if not restaurant_name:
+            return {
+                "response_text": "I'd be happy to help you with a review! Which restaurant would you like to review, and what type of experience did you have?",
+                "action_taken": "review_request_clarification",
+                "was_successful": False
+            }
+        
+        # Generate review based on type
+        if openai_client:
+            review_prompt = f"""
+            Write a {review_type} restaurant review for {restaurant_name}. 
+            
+            Make it sound authentic and personal, around 2-3 sentences.
+            Include specific details like:
+            - Food quality and taste
+            - Service experience  
+            - Atmosphere/ambiance
+            - Value for money
+            
+            Write in first person as if the user experienced it.
+            Keep it genuine and helpful for other diners.
+            """
+            
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that writes authentic restaurant reviews."},
+                    {"role": "user", "content": review_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            generated_review = response.choices[0].message.content.strip()
+        else:
+            # Fallback review templates
+            if review_type in ["good", "great", "positive", "5-star", "excellent"]:
+                generated_review = f"Had a wonderful experience at {restaurant_name}! The food was delicious, service was attentive, and the atmosphere was perfect for our group. Definitely recommend and will be back!"
+            else:
+                generated_review = f"Unfortunately, our experience at {restaurant_name} didn't meet expectations. The service was slow and the food quality could be improved. Hoping they can address these issues."
+        
+        return {
+            "response_text": f"I've drafted a {review_type} review for {restaurant_name}: \n\n\"{generated_review}\"\n\nWould you like me to help you post this on Google Reviews, Yelp, or another platform? I can guide you through the process!",
+            "action_taken": f"review_generated_{review_type}",
+            "was_successful": True,
+            "data": {
+                "restaurant_name": restaurant_name,
+                "review_type": review_type,
+                "generated_review": generated_review,
+                "suggested_platforms": ["Google Reviews", "Yelp", "Facebook", "TripAdvisor"]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Review request error: {e}")
+        return None
+
+async def find_dietary_restaurants(dietary_type: str, session: CorbySession):
+    """Find restaurants with specific dietary options"""
+    try:
+        dietary_mapping = {
+            "vegetarian": "vegetarian-friendly restaurants",
+            "vegan": "vegan restaurants", 
+            "gluten-free": "gluten-free restaurants",
+            "kosher": "kosher restaurants",
+            "halal": "halal restaurants"
+        }
+        
+        search_term = dietary_mapping.get(dietary_type, f"{dietary_type} restaurants")
+        
+        # Search for restaurants
+        restaurants = await search_restaurants_with_availability(
+            search_term,
+            datetime.now().strftime("%Y-%m-%d"),
+            "19:00",
+            2,
+            session.context.get("location", "near me")
+        )
+        
+        if restaurants:
+            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars)" for r in restaurants[:3]]
+            response_text = f"Perfect! I found {len(restaurants)} {dietary_type} restaurants nearby: {', '.join(restaurant_names)}. Would you like me to check their specific {dietary_type} menu options or make a reservation?"
+        else:
+            response_text = f"I'm still building my database of {dietary_type} restaurants in your area. Would you like me to search for restaurants that typically accommodate {dietary_type} diets?"
+        
+        return {
+            "response_text": response_text,
+            "action_taken": f"dietary_search_{dietary_type}",
+            "was_successful": len(restaurants) > 0,
+            "data": {"restaurants": [r.dict() for r in restaurants[:5]] if restaurants else []}
+        }
+        
+    except Exception as e:
+        logger.error(f"Dietary restaurant search error: {e}")
+        return {
+            "response_text": f"I can help you find {dietary_type} restaurants! Let me search for options in your area.",
+            "was_successful": False
+        }
+
 async def generate_corby_response(intent: str, entities: Dict[str, Any], command_text: str, session: CorbySession):
     """Generate Corby's response based on intent and entities"""
     try:
