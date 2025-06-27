@@ -133,7 +133,7 @@ if TWITTER_BEARER_TOKEN:
         twitter_client = None
 
 # Log API key status
-logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}, Twitter: {bool(twitter_client)}, Facebook: {bool(FACEBOOK_APP_ID)}, News: {bool(NEWS_API_KEY)}")
+logger.info(f"API Keys loaded - Google Maps: {bool(GOOGLE_MAPS_API_KEY)}, Google Places: {bool(GOOGLE_PLACES_API_KEY)}, OpenAI: {bool(OPENAI_API_KEY)}, Yelp: {bool(YELP_API_KEY)}, Stripe: {bool(stripe_checkout)}, Twitter: {bool(twitter_client)}, Facebook: {bool(FACEBOOK_APP_ID)}, News: {bool(NEWS_API_KEY)}")
 
 # WebSocket connection manager for real-time messaging
 class ConnectionManager:
