@@ -71,6 +71,18 @@ function App() {
     location: '',
     cuisine: ''
   });
+  const [newCampaign, setNewCampaign] = useState({
+    campaign_name: '',
+    promo_message: '',
+    discount_amount: '',
+    discount_type: 'percentage',
+    promo_code: '',
+    valid_until: '',
+    max_uses: 100,
+    target_radius: 1,
+    send_sms: true,
+    send_push: true
+  });
   const [userRegistration, setUserRegistration] = useState({
     email: '',
     password: '',
