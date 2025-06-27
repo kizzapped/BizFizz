@@ -925,14 +925,15 @@ async def generate_comprehensive_response(analysis: dict, session: CorbySession)
 
 # Corby Voice Assistant AI Functions
 
-async def process_voice_command(user_id: str, command_text: str, session_id: Optional[str] = None):
-    """Process voice command through Corby AI assistant"""
+async def process_voice_command(user_id: str, command_text: str, session_id: Optional[str] = None, voice_profile: str = "friendly"):
+    """Process voice command through enhanced Corby AI assistant"""
     try:
         # Get or create conversation session
         if not session_id:
             session = CorbySession(
                 user_id=user_id,
-                context={"location": "unknown"}
+                context={"location": "unknown"},
+                user_preferences={"voice_profile": voice_profile}
             )
             await db.corby_sessions.insert_one(session.dict())
             session_id = session.id
@@ -942,38 +943,69 @@ async def process_voice_command(user_id: str, command_text: str, session_id: Opt
             if not session:
                 return {"error": "Session not found"}
 
-        # Analyze command with OpenAI
+        # Check for complex queries first
+        complex_response = await handle_complex_queries(command_text, session)
+        if complex_response:
+            # Update conversation and return complex response
+            session.conversation_history.append({
+                "user": command_text,
+                "corby": complex_response["response_text"],
+                "timestamp": datetime.utcnow().isoformat(),
+                "intent": "complex_query"
+            })
+            await db.corby_sessions.replace_one({"id": session_id}, session.dict())
+            return {
+                "session_id": session_id,
+                "response_text": complex_response["response_text"],
+                "intent": "complex_query",
+                "voice_enabled": True,
+                "voice_profile": voice_profile,
+                **complex_response
+            }
+
+        # Regular intent analysis
         intent_analysis = await analyze_voice_intent(command_text, session.conversation_history)
-        
-        # Extract entities and intent
         intent = intent_analysis.get("intent", "general_query")
         entities = intent_analysis.get("entities", {})
         
-        # Generate appropriate response based on intent
-        corby_response = await generate_corby_response(intent, entities, command_text, session)
+        # Generate response based on intent
+        if intent == "general_query":
+            # Use enhanced AI for general conversation
+            ai_response = await get_enhanced_ai_response(command_text, session, voice_profile)
+            corby_response = {
+                "response_text": ai_response["response_text"],
+                "action_taken": "ai_conversation_enhanced",
+                "was_successful": True,
+                "method": ai_response.get("method", "standard")
+            }
+        else:
+            # Use existing specialized handlers
+            corby_response = await generate_corby_response(intent, entities, command_text, session)
+        
+        # Generate premium voice if available
+        voice_data = await generate_premium_voice_audio(corby_response["response_text"], voice_profile)
         
         # Update conversation history
         session.conversation_history.append({
             "user": command_text,
             "corby": corby_response["response_text"],
             "timestamp": datetime.utcnow().isoformat(),
-            "intent": intent
+            "intent": intent,
+            "voice_profile": voice_profile
         })
         
-        # Keep only last 10 exchanges to manage context size
+        # Keep only last 10 exchanges
         if len(session.conversation_history) > 10:
             session.conversation_history = session.conversation_history[-10:]
         
-        # Update session
+        # Update session with enhanced context
         session.last_interaction = datetime.utcnow()
         session.context.update(corby_response.get("context_updates", {}))
+        session.user_preferences["voice_profile"] = voice_profile
         
-        await db.corby_sessions.replace_one(
-            {"id": session_id},
-            session.dict()
-        )
+        await db.corby_sessions.replace_one({"id": session_id}, session.dict())
         
-        # Save voice command record
+        # Save enhanced voice command record
         voice_command = VoiceCommand(
             user_id=user_id,
             command_text=command_text,
@@ -995,15 +1027,19 @@ async def process_voice_command(user_id: str, command_text: str, session_id: Opt
             "action_taken": corby_response.get("action_taken"),
             "data": corby_response.get("data"),
             "voice_enabled": True,
-            "confidence": intent_analysis.get("confidence", 0.8)
+            "voice_profile": voice_profile,
+            "voice_data": voice_data,
+            "confidence": intent_analysis.get("confidence", 0.8),
+            "ai_method": corby_response.get("method", "standard")
         }
         
     except Exception as e:
-        logger.error(f"Voice command processing error: {e}")
+        logger.error(f"Enhanced voice command processing error: {e}")
         return {
-            "response_text": "I'm sorry, I'm having trouble understanding that right now. Could you try rephrasing your request?",
+            "response_text": "I'm experiencing some technical difficulties, but I'm still here to help you find amazing restaurants! Could you try asking again?",
             "intent": "error",
-            "voice_enabled": True
+            "voice_enabled": True,
+            "voice_profile": voice_profile
         }
 
 async def analyze_voice_intent(command_text: str, conversation_history: List[Dict[str, str]]):
