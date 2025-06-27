@@ -1670,6 +1670,273 @@ function App() {
     </div>
   );
 
+  const OpenTableReservationsPage = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">🍽️ Restaurant Reservations</h2>
+          <p className="text-gray-600">Find and book tables at the best restaurants in your area</p>
+        </div>
+
+        {/* Search Section */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h3 className="text-xl font-semibold mb-4 flex items-center">
+            <FaSearch className="mr-2 text-blue-500" />
+            Search Available Restaurants
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="Cuisine, restaurant name..."
+              value={searchQuery.query}
+              onChange={(e) => setSearchQuery({...searchQuery, query: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="date"
+              value={searchQuery.date}
+              onChange={(e) => setSearchQuery({...searchQuery, date: e.target.value})}
+              min={new Date().toISOString().split('T')[0]}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="time"
+              value={searchQuery.time}
+              onChange={(e) => setSearchQuery({...searchQuery, time: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <select
+              value={searchQuery.party_size}
+              onChange={(e) => setSearchQuery({...searchQuery, party_size: parseInt(e.target.value)})}
+              className="border rounded px-3 py-2"
+            >
+              {[1,2,3,4,5,6,7,8].map(num => (
+                <option key={num} value={num}>{num} {num === 1 ? 'guest' : 'guests'}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Location (optional)"
+              value={searchQuery.location}
+              onChange={(e) => setSearchQuery({...searchQuery, location: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+          </div>
+          
+          <button
+            onClick={searchRestaurants}
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Searching...' : '🔍 Search Restaurants'}
+          </button>
+        </div>
+
+        {/* Search Results */}
+        {restaurantSearchResults.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h3 className="text-xl font-semibold mb-4">Available Restaurants ({restaurantSearchResults.length})</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {restaurantSearchResults.map((restaurant) => (
+                <div key={restaurant.restaurant_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold text-lg">{restaurant.restaurant_name}</h4>
+                    <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      {restaurant.price_range}
+                    </span>
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm mb-2">{restaurant.address}</p>
+                  <p className="text-gray-700 text-sm mb-3">{restaurant.cuisine_type}</p>
+                  
+                  <div className="flex items-center mb-3">
+                    <FaStar className="text-yellow-500 mr-1" />
+                    <span className="text-sm font-medium">{restaurant.rating}</span>
+                    <span className="text-sm text-gray-500 ml-1">({restaurant.review_count} reviews)</span>
+                    {restaurant.distance_miles && (
+                      <span className="text-sm text-gray-500 ml-2">• {restaurant.distance_miles} miles</span>
+                    )}
+                  </div>
+                  
+                  {restaurant.available_times.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-sm font-medium text-gray-700 mb-1">Available Times:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {restaurant.available_times.slice(0, 4).map((time) => (
+                          <span key={time} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                            {time}
+                          </span>
+                        ))}
+                        {restaurant.available_times.length > 4 && (
+                          <span className="text-xs text-gray-500">+{restaurant.available_times.length - 4} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => selectRestaurant(restaurant)}
+                      className="flex-1 bg-blue-600 text-white text-sm px-3 py-2 rounded hover:bg-blue-700 transition-colors"
+                    >
+                      📅 Book Table
+                    </button>
+                    {restaurant.booking_url.startsWith('http') && (
+                      <button
+                        onClick={() => window.open(restaurant.booking_url, '_blank')}
+                        className="bg-gray-600 text-white text-sm px-3 py-2 rounded hover:bg-gray-700 transition-colors"
+                      >
+                        🔗 OpenTable
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reservation Form */}
+        {selectedRestaurant && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaBuilding className="mr-2 text-green-500" />
+              Make Reservation at {selectedRestaurant.restaurant_name}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={reservationForm.guest_name}
+                onChange={(e) => setReservationForm({...reservationForm, guest_name: e.target.value})}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={reservationForm.guest_email}
+                onChange={(e) => setReservationForm({...reservationForm, guest_email: e.target.value})}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="tel"
+                placeholder="Phone Number"
+                value={reservationForm.guest_phone}
+                onChange={(e) => setReservationForm({...reservationForm, guest_phone: e.target.value})}
+                className="border rounded px-3 py-2"
+              />
+              <select
+                value={reservationForm.party_size}
+                onChange={(e) => setReservationForm({...reservationForm, party_size: parseInt(e.target.value)})}
+                className="border rounded px-3 py-2"
+              >
+                {[1,2,3,4,5,6,7,8].map(num => (
+                  <option key={num} value={num}>{num} {num === 1 ? 'guest' : 'guests'}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={reservationForm.reservation_date}
+                onChange={(e) => setReservationForm({...reservationForm, reservation_date: e.target.value})}
+                min={new Date().toISOString().split('T')[0]}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="time"
+                value={reservationForm.reservation_time}
+                onChange={(e) => setReservationForm({...reservationForm, reservation_time: e.target.value})}
+                className="border rounded px-3 py-2"
+              />
+            </div>
+            
+            <textarea
+              placeholder="Special requests (optional)"
+              value={reservationForm.special_requests}
+              onChange={(e) => setReservationForm({...reservationForm, special_requests: e.target.value})}
+              className="w-full border rounded px-3 py-2 mb-4"
+              rows="3"
+            />
+            
+            <div className="flex space-x-4">
+              <button
+                onClick={createReservation}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                ✅ Confirm Reservation
+              </button>
+              <button
+                onClick={() => setSelectedRestaurant(null)}
+                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* User's Reservations */}
+        {currentUser && currentUser.user_type === 'consumer' && userReservations.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaComments className="mr-2 text-purple-500" />
+              Your Reservations ({userReservations.length})
+            </h3>
+            <div className="space-y-4">
+              {userReservations.map((reservation) => (
+                <div key={reservation.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-semibold">{reservation.restaurant_name}</h4>
+                      <p className="text-sm text-gray-600">
+                        {new Date(reservation.reservation_date).toLocaleDateString()} at {reservation.reservation_time}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Party of {reservation.party_size} • Confirmation: {reservation.id.slice(0, 8)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        reservation.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {reservation.status.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {reservation.special_requests && (
+                    <p className="text-sm text-gray-700 mb-2">
+                      <strong>Special Requests:</strong> {reservation.special_requests}
+                    </p>
+                  )}
+                  
+                  <div className="flex space-x-2">
+                    {reservation.status !== 'cancelled' && new Date(reservation.reservation_date) > new Date() && (
+                      <button
+                        onClick={() => cancelReservation(reservation.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        Cancel Reservation
+                      </button>
+                    )}
+                    {reservation.opentable_confirmation && (
+                      <span className="text-sm text-gray-500">
+                        OpenTable: {reservation.opentable_confirmation}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const ProximityMarketingPage = () => (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
