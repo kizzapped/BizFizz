@@ -2942,27 +2942,222 @@ async def get_mobile_notifications(business_id: str, limit: int = 10):
         logger.error(f"Mobile notifications error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get notifications")
 
-# Corby Voice Assistant API Endpoints
-
 @app.post("/api/corby/voice-command")
 async def handle_voice_command(command_data: dict):
-    """Process voice command through Corby AI assistant"""
+    """Process voice command through enhanced Corby AI assistant"""
     try:
         user_id = command_data.get("user_id")
         command_text = command_data.get("command_text", "")
         session_id = command_data.get("session_id")
+        voice_profile = command_data.get("voice_profile", "friendly")
         
         if not user_id or not command_text:
             raise HTTPException(status_code=400, detail="User ID and command text required")
         
-        # Process the voice command
-        result = await process_voice_command(user_id, command_text, session_id)
+        # Process the enhanced voice command
+        result = await process_voice_command(user_id, command_text, session_id, voice_profile)
         
         return result
         
     except Exception as e:
-        logger.error(f"Voice command API error: {str(e)}")
+        logger.error(f"Enhanced voice command API error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to process voice command")
+
+@app.post("/api/corby/smart-recommendations")
+async def get_smart_recommendations(request_data: dict):
+    """Get AI-powered contextual restaurant recommendations"""
+    try:
+        user_id = request_data.get("user_id")
+        session_id = request_data.get("session_id")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID required")
+        
+        # Get session for context
+        session_data = await db.corby_sessions.find_one({"id": session_id}) if session_id else None
+        session = CorbySession(**session_data) if session_data else CorbySession(user_id=user_id, context={})
+        
+        # Get contextual recommendations
+        recommendations = await get_contextual_recommendations(user_id, session)
+        
+        return {
+            "recommendations": recommendations,
+            "personalization_level": "high" if session_data else "basic",
+            "context_factors": {
+                "conversation_history": len(session.conversation_history),
+                "user_preferences": session.user_preferences,
+                "location_context": bool(session.context.get("location"))
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Smart recommendations error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get recommendations")
+
+@app.post("/api/corby/voice-profile")
+async def set_voice_profile(profile_data: dict):
+    """Set user's preferred voice profile"""
+    try:
+        user_id = profile_data.get("user_id")
+        voice_profile = profile_data.get("voice_profile", "friendly")
+        session_id = profile_data.get("session_id")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID required")
+        
+        if voice_profile not in CORBY_VOICE_PROFILES:
+            raise HTTPException(status_code=400, detail="Invalid voice profile")
+        
+        # Update session preferences
+        if session_id:
+            await db.corby_sessions.update_one(
+                {"id": session_id},
+                {"$set": {"user_preferences.voice_profile": voice_profile}}
+            )
+        
+        # Get voice settings for profile
+        voice_settings = CORBY_VOICE_PROFILES[voice_profile]
+        
+        return {
+            "voice_profile": voice_profile,
+            "personality": voice_settings["personality"],
+            "speaking_style": voice_settings["speaking_style"],
+            "voice_settings": voice_settings["voice_settings"],
+            "message": f"Voice profile set to {voice_profile}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice profile error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to set voice profile")
+
+@app.get("/api/corby/voice-profiles")
+async def get_available_voice_profiles():
+    """Get available voice profiles"""
+    try:
+        return {
+            "profiles": {
+                profile_name: {
+                    "name": profile_name.title(),
+                    "description": data["personality"],
+                    "style": data["speaking_style"],
+                    "best_for": {
+                        "professional": "Business dining, client meetings, formal occasions",
+                        "friendly": "Casual dining, everyday use, family meals",
+                        "luxury": "Fine dining, special occasions, romantic dinners"
+                    }.get(profile_name, "General use")
+                }
+                for profile_name, data in CORBY_VOICE_PROFILES.items()
+            },
+            "default": "friendly",
+            "premium_features": {
+                "elevenlabs_voice": bool(ELEVENLABS_API_KEY),
+                "claude_ai": bool(ANTHROPIC_API_KEY),
+                "personality_adaptation": True
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice profiles error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get voice profiles")
+
+@app.post("/api/corby/conversation-context")
+async def update_conversation_context(context_data: dict):
+    """Update conversation context for better responses"""
+    try:
+        session_id = context_data.get("session_id")
+        location = context_data.get("location")
+        preferences = context_data.get("preferences", {})
+        occasion = context_data.get("occasion")
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID required")
+        
+        update_data = {}
+        if location:
+            update_data["context.location"] = location
+        if occasion:
+            update_data["context.occasion"] = occasion
+        if preferences:
+            update_data["user_preferences"] = preferences
+        
+        await db.corby_sessions.update_one(
+            {"id": session_id},
+            {"$set": update_data}
+        )
+        
+        return {"message": "Context updated successfully"}
+        
+    except Exception as e:
+        logger.error(f"Context update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update context")
+
+@app.get("/api/corby/analytics/{user_id}")
+async def get_corby_analytics(user_id: str, days: int = 30):
+    """Get user's interaction analytics with Corby"""
+    try:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Command frequency
+        command_pipeline = [
+            {"$match": {
+                "user_id": user_id,
+                "created_at": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": "$intent",
+                "count": {"$sum": 1},
+                "success_rate": {"$avg": {"$cond": ["$was_successful", 1, 0]}}
+            }}
+        ]
+        
+        command_stats = await db.voice_commands.aggregate(command_pipeline).to_list(None)
+        
+        # Daily usage
+        daily_pipeline = [
+            {"$match": {
+                "user_id": user_id,
+                "created_at": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
+                "interactions": {"$sum": 1}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        
+        daily_usage = await db.voice_commands.aggregate(daily_pipeline).to_list(None)
+        
+        # Success metrics
+        total_commands = await db.voice_commands.count_documents({
+            "user_id": user_id,
+            "created_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        successful_commands = await db.voice_commands.count_documents({
+            "user_id": user_id,
+            "was_successful": True,
+            "created_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        return {
+            "analytics_period": {"start": start_date, "end": end_date},
+            "total_interactions": total_commands,
+            "success_rate": (successful_commands / total_commands * 100) if total_commands > 0 else 0,
+            "command_breakdown": command_stats,
+            "daily_usage": daily_usage,
+            "user_engagement": {
+                "avg_daily_interactions": total_commands / days if days > 0 else 0,
+                "most_common_intent": max(command_stats, key=lambda x: x["count"])["_id"] if command_stats else "none",
+                "engagement_level": "high" if total_commands > 50 else "medium" if total_commands > 20 else "low"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Corby analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get analytics")
+
+# Corby Voice Assistant API Endpoints
 
 @app.post("/api/corby/text-to-speech")
 async def text_to_speech_endpoint(tts_data: dict):
