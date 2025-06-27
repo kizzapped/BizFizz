@@ -1363,7 +1363,10 @@ async def handle_advanced_menu_queries(command_text: str, session: CorbySession)
             "menu_items": r"restaurants?.*(with|offering|serving|have|offer)\s+([^?]+?)(?:\s+and\s+([^?]+?))?(?:\s+dishes?|\s+food|\s+meals?|\?|$)",
             "price_comparison": r"(?:best price|cheapest|most affordable|lowest cost|best.*price).*(?:for|on)\s+(.*?)(?:\s+at|\s+in|\?|$)",
             "dietary_specific": r"(?:vegetarian|vegan|gluten.free|kosher|halal)\s+(?:options|restaurants|food)",
-            "cuisine_combination": r"(.*?)\s+and\s+(.*?)\s+(?:restaurants?|cuisine|food)"
+            "cuisine_combination": r"(.*?)\s+and\s+(.*?)\s+(?:restaurants?|cuisine|food)",
+            "atmosphere_search": r"(?:romantic|casual|fine dining|family.friendly|outdoor|rooftop|quiet)\s+(?:restaurants?|places?|spots?)",
+            "occasion_search": r"(?:birthday|anniversary|date night|business meeting|celebration)\s+(?:restaurants?|places?|dining)",
+            "time_specific": r"(?:lunch|dinner|breakfast|brunch)\s+(?:places?|restaurants?|spots?)"
         }
         
         import re
@@ -1387,6 +1390,24 @@ async def handle_advanced_menu_queries(command_text: str, session: CorbySession)
         if re.search(menu_query_patterns["dietary_specific"], command_lower):
             atmosphere = re.search(r"(vegetarian|vegan|gluten.free|kosher|halal)", command_lower).group(1)
             return await find_restaurants_by_atmosphere(atmosphere, session)
+        
+        # Atmosphere-based search
+        atmosphere_match = re.search(menu_query_patterns["atmosphere_search"], command_lower)
+        if atmosphere_match:
+            atmosphere = re.search(r"(romantic|casual|fine dining|family.friendly|outdoor|rooftop|quiet)", command_lower).group(1)
+            return await find_restaurants_by_atmosphere(atmosphere, session)
+        
+        # Occasion-based search
+        occasion_match = re.search(menu_query_patterns["occasion_search"], command_lower)
+        if occasion_match:
+            occasion = re.search(r"(birthday|anniversary|date night|business meeting|celebration)", command_lower).group(1)
+            return await find_restaurants_by_occasion(occasion, session)
+        
+        # Time-specific search
+        time_match = re.search(menu_query_patterns["time_specific"], command_lower)
+        if time_match:
+            meal_time = re.search(r"(lunch|dinner|breakfast|brunch)", command_lower).group(1)
+            return await find_restaurants_by_meal_time(meal_time, session)
         
         return None  # Let other handlers process
         
