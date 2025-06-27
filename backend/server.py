@@ -4690,10 +4690,12 @@ async def send_message(message: Message):
         raise HTTPException(status_code=500, detail="Failed to send message")
 
 # Payment Processing
+# Temporarily disable Stripe integration
 @app.get("/api/stripe/config")
 async def get_stripe_config():
-    """Get Stripe publishable key"""
-    return {"publishableKey": STRIPE_PUBLISHABLE_KEY}
+    """Get Stripe publishable key - temporarily disabled"""
+    logger.warning("Stripe integration is temporarily disabled")
+    raise HTTPException(status_code=503, detail="Payment processing temporarily disabled")
 
 @app.post("/api/payments/create-checkout-session")
 # Temporarily disable Stripe integration
