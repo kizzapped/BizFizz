@@ -287,21 +287,70 @@ class BusinessAdvertisement(BaseModel):
     impressions: int = Field(default=0)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: datetime
-
-class PaymentTransaction(BaseModel):
+class UserLocation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
-    transaction_type: str  # subscription, advertisement, credits
-    amount: float
-    currency: str = Field(default="usd")
-    stripe_session_id: Optional[str] = None
-    payment_status: str = Field(default="pending")
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    latitude: float
+    longitude: float
+    accuracy: float = Field(default=10.0)  # meters
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    is_active: bool = Field(default=True)
+    location_sharing_enabled: bool = Field(default=False)
+    last_activity: datetime = Field(default_factory=datetime.utcnow)
 
-# Subscription packages
+class PromoLocation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_id: str
+    business_name: str
+    restaurant_latitude: float
+    restaurant_longitude: float
+    promo_radius: float = Field(default=1609.34)  # 1 mile in meters
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PromotionalCampaign(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_id: str
+    business_name: str
+    campaign_name: str
+    promo_message: str
+    discount_amount: Optional[float] = None
+    discount_type: str = Field(default="percentage")  # percentage, fixed, bogo
+    promo_code: Optional[str] = None
+    valid_until: datetime
+    max_uses: int = Field(default=100)
+    current_uses: int = Field(default=0)
+    target_radius: float = Field(default=1609.34)  # 1 mile
+    is_active: bool = Field(default=True)
+    send_sms: bool = Field(default=True)
+    send_push: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    success_metrics: Dict[str, int] = Field(default_factory=dict)
+
+class ProximityAlert(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    business_id: str
+    campaign_id: str
+    distance_meters: float
+    promo_message: str
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    opened: bool = Field(default=False)
+    redeemed: bool = Field(default=False)
+    method: str = Field(default="sms")  # sms, push, both
+    user_response: Optional[str] = None
+
+class LocationPermission(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    permission_granted: bool = Field(default=False)
+    location_sharing: bool = Field(default=False)
+    promotional_notifications: bool = Field(default=True)
+    sms_notifications: bool = Field(default=True)
+    push_notifications: bool = Field(default=True)
+    privacy_level: str = Field(default="balanced")  # strict, balanced, open
+    granted_at: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
 class SocialMention(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     platform: str  # twitter, facebook, instagram, google, news
