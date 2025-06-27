@@ -483,6 +483,137 @@ function App() {
     }
   };
 
+  // OpenTable Integration Functions
+  const searchRestaurants = async () => {
+    try {
+      if (!searchQuery.query || !searchQuery.date) {
+        alert('Please enter search terms and select a date');
+        return;
+      }
+
+      setLoading(true);
+      
+      const searchData = {
+        ...searchQuery,
+        user_id: currentUser?.id || 'anonymous'
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/restaurants/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(searchData)
+      });
+
+      const data = await response.json();
+      setRestaurantSearchResults(data.restaurants || []);
+      
+      if (data.restaurants.length === 0) {
+        alert('No restaurants found for your search criteria. Try adjusting your search terms or date.');
+      }
+    } catch (error) {
+      console.error('Error searching restaurants:', error);
+      alert('Error searching restaurants');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectRestaurant = (restaurant) => {
+    setSelectedRestaurant(restaurant);
+    setReservationForm({
+      ...reservationForm,
+      guest_name: currentUser?.name || '',
+      guest_email: currentUser?.email || ''
+    });
+  };
+
+  const createReservation = async () => {
+    try {
+      if (!selectedRestaurant || !currentUser) {
+        alert('Please select a restaurant and make sure you are logged in');
+        return;
+      }
+
+      if (!reservationForm.guest_name || !reservationForm.guest_email || 
+          !reservationForm.guest_phone || !reservationForm.reservation_date || 
+          !reservationForm.reservation_time) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      const reservationData = {
+        user_id: currentUser.id,
+        restaurant_id: selectedRestaurant.restaurant_id,
+        restaurant_name: selectedRestaurant.restaurant_name,
+        ...reservationForm
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/reservations/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reservationData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`🎉 Reservation Confirmed!\n\nConfirmation: ${result.confirmation}\n\n${result.confirmation_message}`);
+        
+        setSelectedRestaurant(null);
+        setReservationForm({
+          guest_name: '',
+          guest_email: '',
+          guest_phone: '',
+          reservation_date: '',
+          reservation_time: '19:00',
+          party_size: 2,
+          special_requests: ''
+        });
+        
+        fetchUserReservations();
+      } else {
+        const error = await response.json();
+        alert(`Error creating reservation: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error creating reservation:', error);
+      alert('Error creating reservation');
+    }
+  };
+
+  const fetchUserReservations = async () => {
+    try {
+      if (currentUser && currentUser.user_type === 'consumer') {
+        const response = await fetch(`${API_BASE_URL}/api/reservations/${currentUser.id}`);
+        const data = await response.json();
+        setUserReservations(data.reservations || []);
+      }
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+    }
+  };
+
+  const cancelReservation = async (reservationId) => {
+    try {
+      const confirmed = window.confirm('Are you sure you want to cancel this reservation?');
+      if (!confirmed) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/reservations/${reservationId}/cancel`, {
+        method: 'PUT'
+      });
+
+      if (response.ok) {
+        alert('Reservation cancelled successfully');
+        fetchUserReservations();
+      } else {
+        const error = await response.json();
+        alert(`Error cancelling reservation: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error cancelling reservation:', error);
+      alert('Error cancelling reservation');
+    }
+  };
+
   const registerUser = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
