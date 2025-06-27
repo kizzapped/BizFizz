@@ -37,6 +37,9 @@ import httpx
 from textblob import TextBlob
 import feedparser
 from concurrent.futures import ThreadPoolExecutor
+import redis
+from functools import wraps
+import pickle
 
 # Load environment variables
 load_dotenv()
