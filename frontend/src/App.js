@@ -736,6 +736,18 @@ function App() {
                       )}
                     </button>
                     <button 
+                      onClick={() => setCurrentPage('proximity-marketing')}
+                      className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
+                    >
+                      <FaMapMarkerAlt className="mr-1" />
+                      Proximity Marketing
+                      {nearbyUsers.length > 0 && (
+                        <span className="ml-1 bg-green-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                          {nearbyUsers.length}
+                        </span>
+                      )}
+                    </button>
+                    <button 
                       onClick={() => setCurrentPage('advanced-analytics')}
                       className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
                     >
