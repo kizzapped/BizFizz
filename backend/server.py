@@ -4696,82 +4696,11 @@ async def get_stripe_config():
     return {"publishableKey": STRIPE_PUBLISHABLE_KEY}
 
 @app.post("/api/payments/create-checkout-session")
+# Temporarily disable Stripe integration
 async def create_checkout_session(request: Dict[str, Any]):
-    """Create Stripe checkout session"""
-    try:
-        if not stripe_checkout:
-            raise HTTPException(status_code=503, detail="Payment processing not available")
-        
-        package_type = request.get("package_type")  # subscription, advertisement
-        package_id = request.get("package_id")
-        user_id = request.get("user_id")
-        origin_url = request.get("origin_url")
-        
-        # Get package details
-        if package_type == "subscription":
-            if package_id not in SUBSCRIPTION_PACKAGES:
-                raise HTTPException(status_code=400, detail="Invalid subscription package")
-            package = SUBSCRIPTION_PACKAGES[package_id]
-        elif package_type == "advertisement":
-            if package_id not in ADVERTISING_PACKAGES:
-                raise HTTPException(status_code=400, detail="Invalid advertising package")
-            package = ADVERTISING_PACKAGES[package_id]
-        else:
-            raise HTTPException(status_code=400, detail="Invalid package type")
-        
-        amount = package["price"]
-        
-        if amount == 0:
-            # Free package, update user directly
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"subscription_tier": package_id, "credits": package.get("credits", 0)}}
-            )
-            return {"message": "Free package activated", "session_id": None}
-        
-        # Create checkout session
-        success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = f"{origin_url}/payment-cancel"
-        
-        checkout_request = CheckoutSessionRequest(
-            amount=amount,
-            currency="usd",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={
-                "user_id": user_id,
-                "package_type": package_type,
-                "package_id": package_id
-            }
-        )
-        
-        session = await stripe_checkout.create_checkout_session(checkout_request)
-        
-        # Create transaction record
-        transaction = await create_payment_transaction(
-            user_id=user_id,
-            transaction_type=package_type,
-            amount=amount,
-            metadata={
-                "package_id": package_id,
-                "stripe_session_id": session.session_id
-            }
-        )
-        
-        # Update transaction with session ID
-        await db.payment_transactions.update_one(
-            {"id": transaction.id},
-            {"$set": {"stripe_session_id": session.session_id}}
-        )
-        
-        return {
-            "session_id": session.session_id,
-            "checkout_url": session.url
-        }
-        
-    except Exception as e:
-        logger.error(f"Create checkout session error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+    """Create Stripe checkout session - temporarily disabled"""
+    logger.warning("Stripe integration is temporarily disabled")
+    raise HTTPException(status_code=503, detail="Payment processing temporarily disabled")
 
 @app.get("/api/payments/checkout-status/{session_id}")
 async def get_checkout_status(session_id: str):
