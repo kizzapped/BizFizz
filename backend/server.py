@@ -1597,6 +1597,271 @@ async def get_mobile_notifications(business_id: str, limit: int = 10):
         logger.error(f"Mobile notifications error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get notifications")
 
+# Location-Based Marketing API Endpoints
+
+@app.post("/api/location/update")
+async def update_user_location(location_data: dict):
+    """Update user's current location and check for promotional triggers"""
+    try:
+        user_id = location_data.get("user_id")
+        latitude = location_data.get("latitude")
+        longitude = location_data.get("longitude")
+        accuracy = location_data.get("accuracy", 10.0)
+        
+        if not all([user_id, latitude, longitude]):
+            raise HTTPException(status_code=400, detail="Missing required location data")
+        
+        # Check location permissions
+        permission = await db.location_permissions.find_one({"user_id": user_id})
+        if not permission or not permission.get("location_sharing", False):
+            return {"message": "Location sharing not enabled"}
+        
+        # Store/update user location
+        user_location = UserLocation(
+            user_id=user_id,
+            latitude=latitude,
+            longitude=longitude,
+            accuracy=accuracy,
+            location_sharing_enabled=True
+        )
+        
+        await db.user_locations.replace_one(
+            {"user_id": user_id},
+            user_location.dict(),
+            upsert=True
+        )
+        
+        # Check for proximity triggers
+        triggered_campaigns = await check_proximity_triggers(user_id, latitude, longitude)
+        
+        notifications_sent = 0
+        for trigger in triggered_campaigns:
+            success = await send_proximity_notification(
+                user_id,
+                trigger["campaign"],
+                trigger["business"],
+                trigger["distance"]
+            )
+            if success:
+                notifications_sent += 1
+        
+        return {
+            "message": "Location updated successfully",
+            "proximity_alerts": len(triggered_campaigns),
+            "notifications_sent": notifications_sent,
+            "nearby_restaurants": len(triggered_campaigns)
+        }
+        
+    except Exception as e:
+        logger.error(f"Location update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update location")
+
+@app.post("/api/location/permissions")
+async def update_location_permissions(permission_data: dict):
+    """Update user's location sharing and notification preferences"""
+    try:
+        user_id = permission_data.get("user_id")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID required")
+        
+        permission = LocationPermission(
+            user_id=user_id,
+            permission_granted=permission_data.get("permission_granted", False),
+            location_sharing=permission_data.get("location_sharing", False),
+            promotional_notifications=permission_data.get("promotional_notifications", True),
+            sms_notifications=permission_data.get("sms_notifications", True),
+            push_notifications=permission_data.get("push_notifications", True),
+            privacy_level=permission_data.get("privacy_level", "balanced")
+        )
+        
+        await db.location_permissions.replace_one(
+            {"user_id": user_id},
+            permission.dict(),
+            upsert=True
+        )
+        
+        return {"message": "Location permissions updated successfully"}
+        
+    except Exception as e:
+        logger.error(f"Permission update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update permissions")
+
+@app.post("/api/campaigns/create")
+async def create_promotional_campaign(campaign_data: dict):
+    """Create a new promotional campaign for a business"""
+    try:
+        # Validate required fields
+        required_fields = ["business_id", "campaign_name", "promo_message", "valid_until"]
+        for field in required_fields:
+            if field not in campaign_data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Get business details
+        business = await db.businesses.find_one({"id": campaign_data["business_id"]})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Parse valid_until datetime
+        valid_until = datetime.fromisoformat(campaign_data["valid_until"].replace("Z", "+00:00"))
+        
+        campaign = PromotionalCampaign(
+            business_id=campaign_data["business_id"],
+            business_name=business.get("name", "Unknown Business"),
+            campaign_name=campaign_data["campaign_name"],
+            promo_message=campaign_data["promo_message"],
+            discount_amount=campaign_data.get("discount_amount"),
+            discount_type=campaign_data.get("discount_type", "percentage"),
+            promo_code=campaign_data.get("promo_code"),
+            valid_until=valid_until,
+            max_uses=campaign_data.get("max_uses", 100),
+            target_radius=campaign_data.get("target_radius", 1609.34),  # 1 mile default
+            send_sms=campaign_data.get("send_sms", True),
+            send_push=campaign_data.get("send_push", True)
+        )
+        
+        await db.promotional_campaigns.insert_one(campaign.dict())
+        
+        return {
+            "message": "Promotional campaign created successfully",
+            "campaign_id": campaign.id,
+            "target_radius_miles": campaign.target_radius / 1609.34
+        }
+        
+    except Exception as e:
+        logger.error(f"Campaign creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create campaign")
+
+@app.get("/api/campaigns/{business_id}")
+async def get_business_campaigns(business_id: str):
+    """Get all campaigns for a business"""
+    try:
+        campaigns = []
+        async for campaign in db.promotional_campaigns.find({"business_id": business_id}).sort("created_at", -1):
+            if "_id" in campaign:
+                del campaign["_id"]
+            
+            # Add performance metrics
+            total_alerts = await db.proximity_alerts.count_documents({"campaign_id": campaign["id"]})
+            opened_alerts = await db.proximity_alerts.count_documents({"campaign_id": campaign["id"], "opened": True})
+            redeemed_alerts = await db.proximity_alerts.count_documents({"campaign_id": campaign["id"], "redeemed": True})
+            
+            campaign["performance"] = {
+                "total_sent": total_alerts,
+                "opened": opened_alerts,
+                "redeemed": redeemed_alerts,
+                "open_rate": (opened_alerts / total_alerts * 100) if total_alerts > 0 else 0,
+                "redemption_rate": (redeemed_alerts / total_alerts * 100) if total_alerts > 0 else 0
+            }
+            
+            campaigns.append(campaign)
+        
+        return {"campaigns": campaigns}
+        
+    except Exception as e:
+        logger.error(f"Get campaigns error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get campaigns")
+
+@app.get("/api/location/nearby-users/{business_id}")
+async def get_nearby_users(business_id: str, radius_miles: float = 1.0):
+    """Get users currently near a business (for restaurant owners)"""
+    try:
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        business_lat = business.get("latitude")
+        business_lon = business.get("longitude")
+        
+        if not business_lat or not business_lon:
+            return {"nearby_users": [], "message": "Business location not set"}
+        
+        radius_meters = radius_miles * 1609.34
+        nearby_users = []
+        
+        # Get recent user locations (last 30 minutes)
+        recent_time = datetime.utcnow() - timedelta(minutes=30)
+        
+        async for location in db.user_locations.find({
+            "timestamp": {"$gte": recent_time},
+            "location_sharing_enabled": True,
+            "is_active": True
+        }):
+            distance = calculate_distance(
+                business_lat, business_lon,
+                location["latitude"], location["longitude"]
+            )
+            
+            if distance <= radius_meters:
+                # Get user info (anonymized for privacy)
+                user = await db.users.find_one({"id": location["user_id"]})
+                if user:
+                    nearby_users.append({
+                        "user_id": location["user_id"],
+                        "name": user.get("name", "Anonymous User"),
+                        "distance_meters": round(distance),
+                        "distance_miles": round(distance / 1609.34, 2),
+                        "last_seen": location["timestamp"],
+                        "user_type": user.get("user_type", "consumer")
+                    })
+        
+        return {
+            "nearby_users": nearby_users,
+            "total_count": len(nearby_users),
+            "search_radius_miles": radius_miles,
+            "business_location": {
+                "latitude": business_lat,
+                "longitude": business_lon
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Nearby users error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get nearby users")
+
+@app.post("/api/proximity/alert/{alert_id}/opened")
+async def mark_proximity_alert_opened(alert_id: str):
+    """Mark proximity alert as opened by user"""
+    try:
+        await db.proximity_alerts.update_one(
+            {"id": alert_id},
+            {"$set": {"opened": True}}
+        )
+        
+        return {"message": "Alert marked as opened"}
+        
+    except Exception as e:
+        logger.error(f"Mark alert opened error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to mark alert as opened")
+
+@app.post("/api/proximity/alert/{alert_id}/redeemed")
+async def mark_proximity_alert_redeemed(alert_id: str, redemption_data: dict):
+    """Mark proximity alert as redeemed"""
+    try:
+        await db.proximity_alerts.update_one(
+            {"id": alert_id},
+            {
+                "$set": {
+                    "redeemed": True,
+                    "user_response": redemption_data.get("response", "redeemed")
+                }
+            }
+        )
+        
+        # Update campaign success metrics
+        alert = await db.proximity_alerts.find_one({"id": alert_id})
+        if alert:
+            await db.promotional_campaigns.update_one(
+                {"id": alert["campaign_id"]},
+                {"$inc": {"success_metrics.redemptions": 1}}
+            )
+        
+        return {"message": "Promo redeemed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Mark alert redeemed error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to mark alert as redeemed")
+
 # Social Media Monitoring API Endpoints
 
 @app.post("/api/social/monitoring/start")
