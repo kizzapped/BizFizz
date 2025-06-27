@@ -911,14 +911,12 @@ function App() {
                     </button>
                   </>
                 )}
-                {userType === 'consumer' && (
-                  <button 
-                    onClick={() => setCurrentPage('marketplace')}
-                    className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                  >
-                    Marketplace
-                  </button>
-                )}
+                <button 
+                  onClick={() => setCurrentPage('marketplace')}
+                  className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+                >
+                  Marketplace
+                </button>
                 {userType === 'consumer' && (
                   <button 
                     onClick={() => setCurrentPage('reservations')}
