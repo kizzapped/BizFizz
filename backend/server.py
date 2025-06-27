@@ -422,6 +422,18 @@ class PaymentTransaction(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
 
+class PaymentTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    transaction_type: str  # subscription, advertisement, credits
+    amount: float
+    currency: str = Field(default="usd")
+    stripe_session_id: Optional[str] = None
+    payment_status: str = Field(default="pending")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+
 class SocialMention(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     platform: str  # twitter, facebook, instagram, google, news
