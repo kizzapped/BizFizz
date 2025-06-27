@@ -844,6 +844,337 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except WebSocketDisconnect:
         manager.disconnect(user_id)
 
+@app.get("/api/analytics/comprehensive/{business_id}")
+async def get_comprehensive_analytics(
+    business_id: str,
+    days: int = 30,
+    include_competitors: bool = True,
+    include_predictions: bool = True
+):
+    """Get comprehensive business analytics with AI insights"""
+    try:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Social Media Performance
+        social_pipeline = [
+            {"$match": {
+                "business_id": business_id,
+                "detected_at": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": {
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$detected_at"}},
+                    "platform": "$platform",
+                    "sentiment": "$sentiment_label"
+                },
+                "count": {"$sum": 1},
+                "avg_sentiment": {"$avg": "$sentiment_score"},
+                "total_engagement": {"$sum": {
+                    "$add": [
+                        {"$ifNull": ["$engagement_metrics.likes", 0]},
+                        {"$ifNull": ["$engagement_metrics.shares", 0]},
+                        {"$ifNull": ["$engagement_metrics.comments", 0]}
+                    ]
+                }}
+            }},
+            {"$sort": {"_id.date": 1}}
+        ]
+        
+        social_data = await db.social_mentions.aggregate(social_pipeline).to_list(None)
+        
+        # Crisis Detection Analytics
+        crisis_pipeline = [
+            {"$match": {
+                "business_id": business_id,
+                "created_at": {"$gte": start_date, "$lte": end_date},
+                "priority": {"$in": ["high", "critical"]}
+            }},
+            {"$group": {
+                "_id": {
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
+                    "alert_type": "$alert_type"
+                },
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"_id.date": 1}}
+        ]
+        
+        crisis_data = await db.social_alerts.aggregate(crisis_pipeline).to_list(None)
+        
+        # Competitor Sentiment Comparison (if enabled)
+        competitor_data = []
+        if include_competitors:
+            # Get competitor mentions for comparison
+            competitor_pipeline = [
+                {"$match": {
+                    "detected_at": {"$gte": start_date, "$lte": end_date},
+                    "business_id": {"$ne": business_id}
+                }},
+                {"$group": {
+                    "_id": "$business_name",
+                    "avg_sentiment": {"$avg": "$sentiment_score"},
+                    "total_mentions": {"$sum": 1},
+                    "positive_mentions": {"$sum": {"$cond": [{"$eq": ["$sentiment_label", "positive"]}, 1, 0]}},
+                    "negative_mentions": {"$sum": {"$cond": [{"$eq": ["$sentiment_label", "negative"]}, 1, 0]}}
+                }},
+                {"$sort": {"avg_sentiment": -1}},
+                {"$limit": 10}
+            ]
+            
+            competitor_data = await db.social_mentions.aggregate(competitor_pipeline).to_list(None)
+        
+        # AI-Powered Insights
+        ai_insights = []
+        if openai_client and include_predictions:
+            try:
+                # Generate AI insights based on data
+                insight_prompt = f"""
+                Analyze this restaurant's social media performance data and provide actionable insights:
+                
+                Social Data: {social_data[:5]}  # Sample data
+                Crisis Data: {crisis_data[:3]}   # Sample alerts
+                
+                Provide 3-5 specific, actionable recommendations for improving their social media presence and customer satisfaction.
+                Return as JSON with format: {{"insights": ["insight1", "insight2", ...], "predictions": ["prediction1", "prediction2", ...], "action_items": ["action1", "action2", ...]}}
+                """
+                
+                response = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a restaurant marketing expert providing data-driven insights."},
+                        {"role": "user", "content": insight_prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
+                
+                ai_insights = json.loads(response.choices[0].message.content.strip())
+            except Exception as e:
+                logger.error(f"AI insights generation failed: {e}")
+                ai_insights = {
+                    "insights": ["Increase engagement during peak hours", "Respond to negative feedback within 2 hours"],
+                    "predictions": ["Sentiment likely to improve with proactive responses"],
+                    "action_items": ["Implement social media response protocol", "Monitor competitor activities"]
+                }
+        
+        # Reputation Score Calculation
+        total_mentions = await db.social_mentions.count_documents({
+            "business_id": business_id,
+            "detected_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        positive_mentions = await db.social_mentions.count_documents({
+            "business_id": business_id,
+            "sentiment_label": "positive",
+            "detected_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        negative_mentions = await db.social_mentions.count_documents({
+            "business_id": business_id,
+            "sentiment_label": "negative",
+            "detected_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        reputation_score = 0
+        if total_mentions > 0:
+            reputation_score = ((positive_mentions - negative_mentions) / total_mentions) * 100
+        
+        # Response Time Analytics
+        response_time_pipeline = [
+            {"$match": {
+                "business_id": business_id,
+                "created_at": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": "$priority",
+                "avg_response_time": {"$avg": {"$subtract": ["$updated_at", "$created_at"]}},
+                "total_alerts": {"$sum": 1},
+                "responded_alerts": {"$sum": {"$cond": ["$is_responded", 1, 0]}}
+            }}
+        ]
+        
+        response_data = await db.social_alerts.aggregate(response_time_pipeline).to_list(None)
+        
+        return {
+            "business_id": business_id,
+            "date_range": {"start": start_date, "end": end_date},
+            "reputation_score": round(reputation_score, 2),
+            "social_performance": {
+                "total_mentions": total_mentions,
+                "positive_mentions": positive_mentions,
+                "negative_mentions": negative_mentions,
+                "neutral_mentions": total_mentions - positive_mentions - negative_mentions,
+                "time_series": social_data
+            },
+            "crisis_management": {
+                "total_crises": len(crisis_data),
+                "crisis_timeline": crisis_data,
+                "response_analytics": response_data
+            },
+            "competitor_analysis": competitor_data,
+            "ai_insights": ai_insights,
+            "recommendations": [
+                "Monitor mentions during peak dining hours (6-9 PM)",
+                "Respond to negative reviews within 2 hours",
+                "Engage with positive mentions to build loyalty",
+                f"Your reputation score of {reputation_score:.1f}% is {'excellent' if reputation_score > 70 else 'good' if reputation_score > 40 else 'needs improvement'}"
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Comprehensive analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate comprehensive analytics")
+
+@app.get("/api/analytics/realtime-dashboard/{business_id}")
+async def get_realtime_dashboard(business_id: str):
+    """Get real-time dashboard data"""
+    try:
+        # Last 24 hours data
+        yesterday = datetime.utcnow() - timedelta(hours=24)
+        
+        # Real-time metrics
+        active_alerts = await db.social_alerts.count_documents({
+            "business_id": business_id,
+            "is_read": False,
+            "created_at": {"$gte": yesterday}
+        })
+        
+        recent_mentions = await db.social_mentions.count_documents({
+            "business_id": business_id,
+            "detected_at": {"$gte": yesterday}
+        })
+        
+        # Sentiment trend (last 6 hours)
+        six_hours_ago = datetime.utcnow() - timedelta(hours=6)
+        recent_sentiment = []
+        async for mention in db.social_mentions.find({
+            "business_id": business_id,
+            "detected_at": {"$gte": six_hours_ago}
+        }).sort("detected_at", -1).limit(20):
+            recent_sentiment.append({
+                "platform": mention["platform"],
+                "sentiment_score": mention["sentiment_score"],
+                "timestamp": mention["detected_at"],
+                "content": mention["content"][:100] + "..." if len(mention["content"]) > 100 else mention["content"]
+            })
+        
+        # Platform activity
+        platform_activity = []
+        platform_pipeline = [
+            {"$match": {
+                "business_id": business_id,
+                "detected_at": {"$gte": yesterday}
+            }},
+            {"$group": {
+                "_id": "$platform",
+                "count": {"$sum": 1},
+                "avg_sentiment": {"$avg": "$sentiment_score"},
+                "last_mention": {"$max": "$detected_at"}
+            }}
+        ]
+        
+        platform_activity = await db.social_mentions.aggregate(platform_pipeline).to_list(None)
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "active_alerts": active_alerts,
+            "recent_mentions": recent_mentions,
+            "sentiment_trend": recent_sentiment,
+            "platform_activity": platform_activity,
+            "status": "live" if recent_mentions > 0 else "monitoring"
+        }
+        
+    except Exception as e:
+        logger.error(f"Real-time dashboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get real-time dashboard")
+
+@app.post("/api/analytics/export-report/{business_id}")
+async def export_analytics_report(business_id: str, format: str = "pdf", days: int = 30):
+    """Export comprehensive analytics report"""
+    try:
+        # Get comprehensive analytics
+        analytics = await get_comprehensive_analytics(business_id, days, True, True)
+        
+        if format.lower() == "pdf":
+            # Generate PDF report using ReportLab
+            from io import BytesIO
+            buffer = BytesIO()
+            
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                spaceAfter=30,
+                textColor=HexColor('#1f2937')
+            )
+            
+            story.append(Paragraph("BizFizz Analytics Report", title_style))
+            story.append(Spacer(1, 20))
+            
+            # Business Info
+            story.append(Paragraph(f"Business ID: {business_id}", styles['Normal']))
+            story.append(Paragraph(f"Report Period: {analytics['date_range']['start'].strftime('%Y-%m-%d')} to {analytics['date_range']['end'].strftime('%Y-%m-%d')}", styles['Normal']))
+            story.append(Paragraph(f"Reputation Score: {analytics['reputation_score']}%", styles['Heading2']))
+            story.append(Spacer(1, 20))
+            
+            # Social Performance Summary
+            story.append(Paragraph("Social Media Performance", styles['Heading2']))
+            perf_data = [
+                ['Metric', 'Count'],
+                ['Total Mentions', str(analytics['social_performance']['total_mentions'])],
+                ['Positive Mentions', str(analytics['social_performance']['positive_mentions'])],
+                ['Negative Mentions', str(analytics['social_performance']['negative_mentions'])],
+                ['Neutral Mentions', str(analytics['social_performance']['neutral_mentions'])]
+            ]
+            
+            perf_table = Table(perf_data)
+            perf_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#f3f4f6')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#1f2937')),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor('#ffffff')),
+                ('GRID', (0, 0), (-1, -1), 1, HexColor('#e5e7eb'))
+            ]))
+            
+            story.append(perf_table)
+            story.append(Spacer(1, 20))
+            
+            # AI Insights
+            if analytics.get('ai_insights'):
+                story.append(Paragraph("AI-Powered Insights", styles['Heading2']))
+                for insight in analytics['ai_insights'].get('insights', []):
+                    story.append(Paragraph(f"• {insight}", styles['Normal']))
+                story.append(Spacer(1, 10))
+                
+                story.append(Paragraph("Action Items", styles['Heading3']))
+                for action in analytics['ai_insights'].get('action_items', []):
+                    story.append(Paragraph(f"• {action}", styles['Normal']))
+            
+            doc.build(story)
+            buffer.seek(0)
+            
+            return FileResponse(
+                path=None,
+                media_type='application/pdf',
+                filename=f"bizfizz_report_{business_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            )
+        
+        else:  # JSON format
+            return analytics
+            
+    except Exception as e:
+        logger.error(f"Export report error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export report")
+
 # Social Media Monitoring API Endpoints
 
 @app.post("/api/social/monitoring/start")
