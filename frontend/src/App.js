@@ -1132,6 +1132,18 @@ function App() {
                   )}
                 </button>
                 <button 
+                  onClick={() => setCurrentPage('corby')}
+                  className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
+                >
+                  <FaBrain className="mr-1" />
+                  Voice Assistant
+                  {isListening && (
+                    <span className="ml-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                      🎙️
+                    </span>
+                  )}
+                </button>
+                <button 
                   onClick={() => setCurrentPage('pricing')}
                   className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
                 >
