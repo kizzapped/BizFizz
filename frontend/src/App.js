@@ -56,14 +56,32 @@ function App() {
     fetchBusinesses();
     fetchAdvertisements();
     
+    // Mobile detection
+    const checkMobile = () => {
+      setIsMobileView(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
     if (currentUser) {
       initializeWebSocket();
       fetchSocialMentions();
       fetchSocialAlerts();
       fetchNewsArticles();
+      fetchMobileNotifications();
       
       if (currentUser.user_type === 'business') {
         fetchSocialAnalytics();
+        fetchRealTimeDashboard();
+        fetchComprehensiveAnalytics();
+        
+        // Real-time dashboard updates every 30 seconds
+        const interval = setInterval(() => {
+          fetchRealTimeDashboard();
+        }, 30000);
+        
+        return () => clearInterval(interval);
       }
     }
     
@@ -71,6 +89,7 @@ function App() {
       if (websocket) {
         websocket.close();
       }
+      window.removeEventListener('resize', checkMobile);
     };
   }, [currentUser]);
 
