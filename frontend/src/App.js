@@ -632,6 +632,193 @@ function App() {
     }
   };
 
+  // Corby Voice Assistant Functions
+  useEffect(() => {
+    // Check for voice support
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      setVoiceSupported(true);
+      initializeVoiceSettings();
+    }
+  }, []);
+
+  const initializeVoiceSettings = () => {
+    if ('speechSynthesis' in window) {
+      const voices = speechSynthesis.getVoices();
+      // Try to find a good female voice for Corby
+      const preferredVoice = voices.find(voice => 
+        voice.name.includes('Google US English Female') ||
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Victoria') ||
+        (voice.lang === 'en-US' && voice.name.includes('Female'))
+      ) || voices.find(voice => voice.lang === 'en-US') || voices[0];
+      
+      setVoiceSettings(prev => ({
+        ...prev,
+        voice: preferredVoice
+      }));
+    }
+  };
+
+  const startListening = () => {
+    if (!voiceSupported) {
+      alert('Voice recognition is not supported in your browser');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    
+    recognition.onstart = () => {
+      setIsListening(true);
+      setCorbyResponse('');
+    };
+    
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice input:', transcript);
+      
+      // Add user message to conversation
+      setConversationHistory(prev => [...prev, {
+        type: 'user',
+        message: transcript,
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+      
+      // Process with Corby
+      await processVoiceCommand(transcript);
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      
+      if (event.error === 'not-allowed') {
+        alert('Microphone access denied. Please enable microphone permissions for voice features.');
+      } else {
+        speakResponse("I didn't catch that. Could you try again?");
+      }
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognition.start();
+  };
+
+  const processVoiceCommand = async (commandText) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/corby/voice-command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser?.id || 'anonymous',
+          command_text: commandText,
+          session_id: corbySessionId
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.session_id && !corbySessionId) {
+        setCorbySessionId(result.session_id);
+      }
+      
+      // Add Corby's response to conversation
+      setConversationHistory(prev => [...prev, {
+        type: 'corby',
+        message: result.response_text,
+        timestamp: new Date().toLocaleTimeString(),
+        intent: result.intent,
+        action: result.action_taken
+      }]);
+      
+      setCorbyResponse(result.response_text);
+      
+      // Speak the response
+      if (result.voice_enabled) {
+        speakResponse(result.response_text);
+      }
+      
+      // Handle data responses (like restaurant search results)
+      if (result.data && result.data.restaurants) {
+        setRestaurantSearchResults(result.data.restaurants);
+        setCurrentPage('reservations');
+      }
+      
+    } catch (error) {
+      console.error('Error processing voice command:', error);
+      const errorResponse = "I'm having trouble right now. Please try again.";
+      setConversationHistory(prev => [...prev, {
+        type: 'corby',
+        message: errorResponse,
+        timestamp: new Date().toLocaleTimeString(),
+        intent: 'error'
+      }]);
+      speakResponse(errorResponse);
+    }
+  };
+
+  const speakResponse = (text) => {
+    if (!('speechSynthesis' in window)) {
+      console.log('Text-to-speech not supported');
+      return;
+    }
+
+    // Cancel any ongoing speech
+    speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Apply voice settings
+    utterance.rate = voiceSettings.rate;
+    utterance.pitch = voiceSettings.pitch;
+    utterance.volume = voiceSettings.volume;
+    if (voiceSettings.voice) {
+      utterance.voice = voiceSettings.voice;
+    }
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event.error);
+      setIsSpeaking(false);
+    };
+    
+    speechSynthesis.speak(utterance);
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  const clearConversation = () => {
+    setConversationHistory([]);
+    setCorbyResponse('');
+    setCorbySessionId(null);
+  };
+
+  const quickVoiceCommands = [
+    "Hey Corby, find Italian restaurants near me",
+    "What are the best sushi places nearby?",
+    "Book a table for 2 tonight at 7 PM",
+    "Check availability at Joe's Bistro tomorrow",
+    "Recommend restaurants for a romantic dinner"
+  ];
+
   const registerUser = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
