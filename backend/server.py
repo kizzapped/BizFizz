@@ -2529,6 +2529,167 @@ async def get_mobile_notifications(business_id: str, limit: int = 10):
         logger.error(f"Mobile notifications error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get notifications")
 
+# Corby Voice Assistant API Endpoints
+
+@app.post("/api/corby/voice-command")
+async def handle_voice_command(command_data: dict):
+    """Process voice command through Corby AI assistant"""
+    try:
+        user_id = command_data.get("user_id")
+        command_text = command_data.get("command_text", "")
+        session_id = command_data.get("session_id")
+        
+        if not user_id or not command_text:
+            raise HTTPException(status_code=400, detail="User ID and command text required")
+        
+        # Process the voice command
+        result = await process_voice_command(user_id, command_text, session_id)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Voice command API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process voice command")
+
+@app.post("/api/corby/text-to-speech")
+async def text_to_speech_endpoint(tts_data: dict):
+    """Generate audio URL for text-to-speech (placeholder for TTS service integration)"""
+    try:
+        text = tts_data.get("text", "")
+        voice = tts_data.get("voice", "corby")  # Custom voice options
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required for TTS")
+        
+        # In production, integrate with services like:
+        # - ElevenLabs for premium voice synthesis
+        # - Google Cloud Text-to-Speech
+        # - Amazon Polly
+        # - Azure Cognitive Services Speech
+        
+        # For now, return Web Speech API instructions
+        return {
+            "message": "Use Web Speech API for client-side TTS",
+            "text": text,
+            "voice_settings": {
+                "rate": 0.9,
+                "pitch": 1.0,
+                "volume": 0.8,
+                "voice_name": "Google US English Female"
+            },
+            "use_browser_tts": True
+        }
+        
+    except Exception as e:
+        logger.error(f"TTS API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate speech")
+
+@app.get("/api/corby/session/{session_id}")
+async def get_corby_session(session_id: str):
+    """Get Corby conversation session"""
+    try:
+        session = await db.corby_sessions.find_one({"id": session_id})
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if "_id" in session:
+            del session["_id"]
+        
+        return {"session": session}
+        
+    except Exception as e:
+        logger.error(f"Get session error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get session")
+
+@app.get("/api/corby/conversations/{user_id}")
+async def get_user_conversations(user_id: str, limit: int = 10):
+    """Get user's conversation history with Corby"""
+    try:
+        conversations = []
+        async for command in db.voice_commands.find({"user_id": user_id}).sort("created_at", -1).limit(limit):
+            if "_id" in command:
+                del command["_id"]
+            conversations.append(command)
+        
+        return {"conversations": conversations, "total": len(conversations)}
+        
+    except Exception as e:
+        logger.error(f"Get conversations error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get conversations")
+
+@app.post("/api/corby/feedback")
+async def corby_feedback(feedback_data: dict):
+    """Provide feedback on Corby's responses for improvement"""
+    try:
+        command_id = feedback_data.get("command_id")
+        rating = feedback_data.get("rating")  # 1-5 stars
+        feedback_text = feedback_data.get("feedback", "")
+        
+        if not command_id or not rating:
+            raise HTTPException(status_code=400, detail="Command ID and rating required")
+        
+        # Store feedback for improving Corby
+        feedback_record = {
+            "id": str(uuid.uuid4()),
+            "command_id": command_id,
+            "rating": rating,
+            "feedback": feedback_text,
+            "created_at": datetime.utcnow()
+        }
+        
+        await db.corby_feedback.insert_one(feedback_record)
+        
+        return {"message": "Feedback recorded successfully"}
+        
+    except Exception as e:
+        logger.error(f"Feedback error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to record feedback")
+
+@app.get("/api/corby/capabilities")
+async def get_corby_capabilities():
+    """Get Corby's current capabilities and features"""
+    try:
+        return {
+            "name": "Corby",
+            "version": "1.0",
+            "description": "Your personal restaurant assistant",
+            "capabilities": [
+                "Restaurant search by cuisine, location, and preferences",
+                "Real-time availability checking",
+                "Table reservation booking",
+                "Personalized restaurant recommendations",
+                "Conversational dining assistance",
+                "Voice and text interaction",
+                "Context-aware responses"
+            ],
+            "supported_intents": [
+                "restaurant_search",
+                "make_reservation", 
+                "check_availability",
+                "get_recommendations",
+                "modify_reservation",
+                "general_query",
+                "greeting",
+                "help"
+            ],
+            "voice_features": {
+                "speech_recognition": True,
+                "text_to_speech": True,
+                "natural_language_processing": True,
+                "conversation_memory": True
+            },
+            "integration_status": {
+                "openai": bool(openai_client),
+                "restaurant_search": True,
+                "reservation_system": True,
+                "user_preferences": True
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Capabilities error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get capabilities")
+
 # OpenTable Reservation API Endpoints
 
 @app.post("/api/restaurants/search")
