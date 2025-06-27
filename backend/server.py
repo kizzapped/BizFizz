@@ -1193,6 +1193,166 @@ async def fallback_intent_detection(command_text: str):
         "confidence": 0.7
     }
 
+
+async def find_restaurants_by_atmosphere(atmosphere: str, session: CorbySession):
+    """Find restaurants by atmosphere/ambiance"""
+    try:
+        atmosphere_mapping = {
+            "romantic": "romantic restaurants with dim lighting and intimate settings",
+            "casual": "casual dining restaurants for relaxed meals",
+            "fine dining": "upscale fine dining establishments",
+            "family-friendly": "family restaurants with kid-friendly options",
+            "outdoor": "restaurants with outdoor seating and patios",
+            "rooftop": "rooftop restaurants with scenic views",
+            "quiet": "quiet restaurants perfect for conversation",
+            # Add dietary options as atmospheres
+            "vegetarian": "vegetarian-friendly restaurants with great ambiance",
+            "vegan": "vegan restaurants with welcoming atmosphere", 
+            "gluten-free": "gluten-free friendly restaurants",
+            "kosher": "kosher restaurants with authentic atmosphere",
+            "halal": "halal restaurants with cultural ambiance"
+        }
+        
+        search_term = atmosphere_mapping.get(atmosphere, f"{atmosphere} restaurants")
+        
+        # Search for restaurants (using the existing search function)
+        restaurants = await search_restaurants_with_availability(
+            search_term,
+            datetime.now().strftime("%Y-%m-%d"),
+            "19:00",
+            2,
+            session.context.get("location", "near me")
+        )
+        
+        if restaurants:
+            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars, {r.price_range})" for r in restaurants[:3]]
+            response_text = f"Perfect! I found {len(restaurants)} {atmosphere} restaurants: {', '.join(restaurant_names)}. These places have the perfect {atmosphere} atmosphere you're looking for. Would you like me to check availability or make a reservation?"
+        else:
+            response_text = f"I'm building my database of {atmosphere} restaurants in your area. Let me search for restaurants that typically offer a {atmosphere} atmosphere."
+        
+        return {
+            "response_text": response_text,
+            "action_taken": f"atmosphere_search_{atmosphere}",
+            "was_successful": len(restaurants) > 0,
+            "data": {"restaurants": [r.dict() for r in restaurants[:5]] if restaurants else [], "atmosphere": atmosphere}
+        }
+        
+    except Exception as e:
+        logger.error(f"Atmosphere restaurant search error: {e}")
+        return {
+            "response_text": f"I can help you find {atmosphere} restaurants! Let me search for the perfect ambiance for your dining experience.",
+            "was_successful": False
+        }
+
+async def find_restaurants_by_occasion(occasion: str, session: CorbySession):
+    """Find restaurants suitable for specific occasions"""
+    try:
+        occasion_mapping = {
+            "birthday": "birthday celebration restaurants with special services",
+            "anniversary": "romantic anniversary restaurants for couples",
+            "date night": "intimate date night restaurants",
+            "business meeting": "business-friendly restaurants with quiet atmosphere",
+            "celebration": "celebration restaurants perfect for special events"
+        }
+        
+        search_term = occasion_mapping.get(occasion, f"{occasion} restaurants")
+        
+        restaurants = await search_restaurants_with_availability(
+            search_term,
+            datetime.now().strftime("%Y-%m-%d"),
+            "19:00",
+            2,
+            session.context.get("location", "near me")
+        )
+        
+        if restaurants:
+            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars)" for r in restaurants[:3]]
+            
+            occasion_tips = {
+                "birthday": "Many of these restaurants offer complimentary desserts for birthday celebrations!",
+                "anniversary": "These romantic spots are perfect for celebrating your special milestone.",
+                "date night": "These intimate restaurants create the perfect atmosphere for romance.",
+                "business meeting": "These restaurants offer quiet environments ideal for professional discussions.",
+                "celebration": "These venues are excellent for marking special occasions with style."
+            }
+            
+            tip = occasion_tips.get(occasion, f"These restaurants are great for {occasion}.")
+            response_text = f"Excellent choice for your {occasion}! I found {len(restaurants)} perfect restaurants: {', '.join(restaurant_names)}. {tip} Would you like me to make a reservation?"
+        else:
+            response_text = f"Let me help you find the perfect restaurant for your {occasion}. I'll search for venues that specialize in making special occasions memorable."
+        
+        return {
+            "response_text": response_text,
+            "action_taken": f"occasion_search_{occasion}",
+            "was_successful": len(restaurants) > 0,
+            "data": {"restaurants": [r.dict() for r in restaurants[:5]] if restaurants else [], "occasion": occasion}
+        }
+        
+    except Exception as e:
+        logger.error(f"Occasion restaurant search error: {e}")
+        return {
+            "response_text": f"I'd love to help you find the perfect restaurant for your {occasion}! Let me search for suitable venues.",
+            "was_successful": False
+        }
+
+async def find_restaurants_by_meal_time(meal_time: str, session: CorbySession):
+    """Find restaurants by meal time (breakfast, lunch, dinner, brunch)"""
+    try:
+        meal_time_mapping = {
+            "breakfast": "breakfast restaurants and cafes",
+            "lunch": "lunch restaurants with quick service",
+            "dinner": "dinner restaurants for evening dining",
+            "brunch": "brunch restaurants with weekend specials"
+        }
+        
+        search_term = meal_time_mapping.get(meal_time, f"{meal_time} restaurants")
+        
+        # Set appropriate time based on meal
+        time_mapping = {
+            "breakfast": "08:00",
+            "lunch": "12:00", 
+            "dinner": "19:00",
+            "brunch": "11:00"
+        }
+        
+        search_time = time_mapping.get(meal_time, "12:00")
+        
+        restaurants = await search_restaurants_with_availability(
+            search_term,
+            datetime.now().strftime("%Y-%m-%d"),
+            search_time,
+            2,
+            session.context.get("location", "near me")
+        )
+        
+        if restaurants:
+            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars)" for r in restaurants[:3]]
+            
+            meal_descriptions = {
+                "breakfast": "Start your day right with these excellent breakfast spots!",
+                "lunch": "Perfect for a midday meal with great lunch options.",
+                "dinner": "Enjoy a wonderful evening dining experience.",
+                "brunch": "These spots serve amazing weekend brunch!"
+            }
+            
+            description = meal_descriptions.get(meal_time, f"Great {meal_time} options!")
+            response_text = f"{description} I found {len(restaurants)} excellent {meal_time} restaurants: {', '.join(restaurant_names)}. Would you like me to check availability for {meal_time} time?"
+        else:
+            response_text = f"Let me find great {meal_time} restaurants in your area. I'll search for places that excel at {meal_time} service."
+        
+        return {
+            "response_text": response_text,
+            "action_taken": f"meal_time_search_{meal_time}",
+            "was_successful": len(restaurants) > 0,
+            "data": {"restaurants": [r.dict() for r in restaurants[:5]] if restaurants else [], "meal_time": meal_time, "suggested_time": search_time}
+        }
+        
+    except Exception as e:
+        logger.error(f"Meal time restaurant search error: {e}")
+        return {
+            "response_text": f"I can help you find great {meal_time} restaurants! Let me search for the best options in your area.",
+            "was_successful": False
+        }
 # Advanced Menu Query Functions
 
 async def handle_advanced_menu_queries(command_text: str, session: CorbySession):
