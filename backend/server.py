@@ -546,6 +546,383 @@ ADVERTISING_PACKAGES = {
     "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
 }
 
+# Advanced AI Voice Features
+
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+
+# Premium Voice Personalities for Corby
+CORBY_VOICE_PROFILES = {
+    "professional": {
+        "personality": "Professional, efficient, and knowledgeable restaurant concierge",
+        "speaking_style": "Clear, articulate, and business-like",
+        "voice_settings": {"rate": 0.9, "pitch": 1.0, "volume": 0.8}
+    },
+    "friendly": {
+        "personality": "Warm, enthusiastic, and personable dining companion",
+        "speaking_style": "Conversational, upbeat, and encouraging",
+        "voice_settings": {"rate": 1.0, "pitch": 1.1, "volume": 0.9}
+    },
+    "luxury": {
+        "personality": "Sophisticated, refined, and exclusive dining advisor",
+        "speaking_style": "Elegant, thoughtful, and discerning",
+        "voice_settings": {"rate": 0.8, "pitch": 0.9, "volume": 0.85}
+    }
+}
+
+async def get_enhanced_ai_response(command_text: str, session: CorbySession, voice_profile: str = "friendly"):
+    """Get enhanced AI response using multiple AI models"""
+    try:
+        # Use Claude for sophisticated reasoning if available
+        if ANTHROPIC_API_KEY:
+            return await get_claude_response(command_text, session, voice_profile)
+        
+        # Enhanced OpenAI response
+        return await get_openai_enhanced_response(command_text, session, voice_profile)
+        
+    except Exception as e:
+        logger.error(f"Enhanced AI response error: {e}")
+        return await get_openai_enhanced_response(command_text, session, voice_profile)
+
+async def get_claude_response(command_text: str, session: CorbySession, voice_profile: str):
+    """Get response from Claude for superior reasoning"""
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        
+        personality = CORBY_VOICE_PROFILES[voice_profile]["personality"]
+        speaking_style = CORBY_VOICE_PROFILES[voice_profile]["speaking_style"]
+        
+        # Build context
+        context = ""
+        if session.conversation_history:
+            recent_context = session.conversation_history[-3:]
+            context = "\n".join([f"User: {h['user']}\nCorby: {h['corby']}" for h in recent_context])
+        
+        system_prompt = f"""You are Corby, an AI restaurant assistant with this personality: {personality}
+        
+Speaking style: {speaking_style}
+
+Key capabilities:
+- Search restaurants by cuisine, location, price, ratings
+- Check real-time availability and make reservations
+- Provide personalized recommendations based on user preferences
+- Handle dietary restrictions and special occasions
+- Give local dining insights and hidden gems
+- Manage reservation changes and cancellations
+
+Context: {context}
+
+User's current location context: {session.context.get('location', 'unknown')}
+User preferences: {session.user_preferences}
+
+Respond naturally and helpfully to: "{command_text}"
+
+Keep responses conversational, under 100 words, and actionable."""
+        
+        message = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=200,
+            temperature=0.7,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": command_text}
+            ]
+        )
+        
+        return {
+            "response_text": message.content[0].text,
+            "method": "claude_enhanced",
+            "voice_profile": voice_profile
+        }
+        
+    except Exception as e:
+        logger.error(f"Claude response error: {e}")
+        return await get_openai_enhanced_response(command_text, session, voice_profile)
+
+async def get_openai_enhanced_response(command_text: str, session: CorbySession, voice_profile: str):
+    """Enhanced OpenAI response with personality"""
+    try:
+        if not openai_client:
+            return {"response_text": "I'm here to help with restaurants! What would you like to know?"}
+        
+        personality = CORBY_VOICE_PROFILES[voice_profile]["personality"]
+        speaking_style = CORBY_VOICE_PROFILES[voice_profile]["speaking_style"]
+        
+        context = ""
+        if session.conversation_history:
+            recent_context = session.conversation_history[-3:]
+            context = "\n".join([f"User: {h['user']}\nCorby: {h['corby']}" for h in recent_context])
+        
+        enhanced_prompt = f"""You are Corby, a sophisticated AI restaurant assistant.
+
+Personality: {personality}
+Speaking Style: {speaking_style}
+
+Recent conversation:
+{context}
+
+User preferences: {session.user_preferences}
+Location context: {session.context.get('location', 'unknown')}
+
+User says: "{command_text}"
+
+Respond with enthusiasm and expertise. Be helpful, specific, and conversational. Under 80 words."""
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are Corby, an expert restaurant assistant. Be helpful, enthusiastic, and conversational."},
+                {"role": "user", "content": enhanced_prompt}
+            ],
+            max_tokens=150,
+            temperature=0.8
+        )
+        
+        return {
+            "response_text": response.choices[0].message.content.strip(),
+            "method": "openai_enhanced",
+            "voice_profile": voice_profile
+        }
+        
+    except Exception as e:
+        logger.error(f"OpenAI enhanced response error: {e}")
+        return {"response_text": "I'm having trouble right now, but I'm here to help with restaurants!"}
+
+async def generate_premium_voice_audio(text: str, voice_profile: str = "friendly"):
+    """Generate premium quality voice using ElevenLabs (when available)"""
+    try:
+        if not ELEVENLABS_API_KEY:
+            return {"use_browser_tts": True, "settings": CORBY_VOICE_PROFILES[voice_profile]["voice_settings"]}
+        
+        # ElevenLabs integration for premium voice
+        voice_id = {
+            "professional": "ErXwobaYiN019PkySvjV",  # Antoni
+            "friendly": "EXAVITQu4vr4xnSDxMaL",    # Bella
+            "luxury": "VR6AewLTigWG4xSOukaG"       # Arnold
+        }.get(voice_profile, "EXAVITQu4vr4xnSDxMaL")
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": ELEVENLABS_API_KEY
+                },
+                json={
+                    "text": text,
+                    "model_id": "eleven_monolingual_v1",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.5
+                    }
+                }
+            )
+            
+            if response.status_code == 200:
+                # In production, save to file system or cloud storage
+                audio_id = str(uuid.uuid4())
+                return {
+                    "audio_id": audio_id,
+                    "audio_url": f"/api/corby/audio/{audio_id}",
+                    "use_premium_voice": True,
+                    "voice_profile": voice_profile
+                }
+        
+        # Fallback to browser TTS
+        return {"use_browser_tts": True, "settings": CORBY_VOICE_PROFILES[voice_profile]["voice_settings"]}
+        
+    except Exception as e:
+        logger.error(f"Premium voice generation error: {e}")
+        return {"use_browser_tts": True, "settings": CORBY_VOICE_PROFILES[voice_profile]["voice_settings"]}
+
+async def get_contextual_recommendations(user_id: str, session: CorbySession):
+    """Get AI-powered contextual recommendations"""
+    try:
+        # Get user's location
+        user_location = await db.user_locations.find_one({"user_id": user_id})
+        
+        # Get user's past reservations for preferences
+        past_reservations = []
+        async for reservation in db.opentable_reservations.find({"user_id": user_id}).limit(5):
+            past_reservations.append(reservation)
+        
+        # Get user's social activity
+        user_mentions = []
+        async for mention in db.social_mentions.find({"user_id": user_id}).limit(3):
+            user_mentions.append(mention)
+        
+        # AI analysis for recommendations
+        if openai_client:
+            context_data = {
+                "location": user_location,
+                "past_reservations": past_reservations,
+                "social_activity": user_mentions,
+                "conversation_context": session.conversation_history[-3:] if session.conversation_history else [],
+                "user_preferences": session.user_preferences,
+                "time_of_day": datetime.now().strftime("%H:%M"),
+                "day_of_week": datetime.now().strftime("%A")
+            }
+            
+            recommendation_prompt = f"""
+Based on this user data, provide 3 specific restaurant recommendations:
+
+User Context: {context_data}
+
+Consider:
+- Time of day and dining preferences
+- Past restaurant choices and patterns  
+- Current conversation context
+- Location and convenience
+- Special occasions or events
+
+Return JSON format:
+{{
+  "recommendations": [
+    {{
+      "restaurant_name": "name",
+      "reason": "why this fits the user",
+      "cuisine": "type",
+      "price_range": "$$",
+      "best_time": "lunch/dinner",
+      "special_note": "unique selling point"
+    }}
+  ],
+  "personal_message": "conversational explanation"
+}}
+            """
+            
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert restaurant recommendation engine. Provide personalized, contextual suggestions."},
+                    {"role": "user", "content": recommendation_prompt}
+                ],
+                max_tokens=400,
+                temperature=0.7
+            )
+            
+            try:
+                return json.loads(response.choices[0].message.content.strip())
+            except:
+                pass
+        
+        # Fallback recommendations
+        return {
+            "recommendations": [
+                {
+                    "restaurant_name": "Local Favorite Bistro",
+                    "reason": "Popular choice for your area",
+                    "cuisine": "American",
+                    "price_range": "$$",
+                    "best_time": "dinner",
+                    "special_note": "Great for casual dining"
+                }
+            ],
+            "personal_message": "Based on your location, here are some great options nearby!"
+        }
+        
+    except Exception as e:
+        logger.error(f"Contextual recommendations error: {e}")
+        return {"recommendations": [], "personal_message": "I can help you find great restaurants! What are you in the mood for?"}
+
+async def handle_complex_queries(command_text: str, session: CorbySession):
+    """Handle complex, multi-part queries with advanced AI"""
+    try:
+        # Extract multiple intents and requirements
+        if openai_client:
+            analysis_prompt = f"""
+Analyze this complex restaurant query and extract all requirements:
+
+Query: "{command_text}"
+
+Extract and return JSON:
+{{
+  "primary_intent": "main request",
+  "requirements": {{
+    "cuisine": "if specified",
+    "location": "if specified", 
+    "date": "if specified",
+    "time": "if specified",
+    "party_size": "if specified",
+    "price_range": "if specified",
+    "dietary_restrictions": "if specified",
+    "occasion": "if specified (birthday, anniversary, etc)",
+    "atmosphere": "if specified (romantic, casual, etc)",
+    "special_needs": "if specified (parking, accessibility, etc)"
+  }},
+  "complexity_score": "1-10",
+  "suggested_follow_up": "what to ask next"
+}}
+            """
+            
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert at analyzing complex restaurant requests."},
+                    {"role": "user", "content": analysis_prompt}
+                ],
+                max_tokens=300,
+                temperature=0.1
+            )
+            
+            try:
+                analysis = json.loads(response.choices[0].message.content.strip())
+                
+                # If complex query, provide comprehensive response
+                if analysis.get("complexity_score", 0) > 6:
+                    return await generate_comprehensive_response(analysis, session)
+                
+            except Exception as e:
+                logger.error(f"Complex query analysis error: {e}")
+        
+        return None  # Let normal processing handle it
+        
+    except Exception as e:
+        logger.error(f"Complex query handling error: {e}")
+        return None
+
+async def generate_comprehensive_response(analysis: dict, session: CorbySession):
+    """Generate comprehensive response for complex queries"""
+    try:
+        requirements = analysis.get("requirements", {})
+        primary_intent = analysis.get("primary_intent", "")
+        
+        # Build comprehensive response
+        response_parts = []
+        
+        if primary_intent:
+            response_parts.append(f"I understand you're looking for {primary_intent}.")
+        
+        # Address specific requirements
+        if requirements.get("occasion"):
+            response_parts.append(f"For your {requirements['occasion']}, I recommend focusing on restaurants with the right atmosphere.")
+        
+        if requirements.get("dietary_restrictions"):
+            response_parts.append(f"I'll make sure to find options that accommodate {requirements['dietary_restrictions']} dietary needs.")
+        
+        if requirements.get("atmosphere"):
+            response_parts.append(f"Looking for a {requirements['atmosphere']} setting - I know just the places!")
+        
+        # Suggest next steps
+        follow_up = analysis.get("suggested_follow_up", "")
+        if follow_up:
+            response_parts.append(follow_up)
+        
+        comprehensive_response = " ".join(response_parts)
+        
+        return {
+            "response_text": comprehensive_response,
+            "action_taken": "complex_query_analysis",
+            "was_successful": True,
+            "data": {"analysis": analysis, "requirements": requirements}
+        }
+        
+    except Exception as e:
+        logger.error(f"Comprehensive response error: {e}")
+        return None
+
 # Corby Voice Assistant AI Functions
 
 async def process_voice_command(user_id: str, command_text: str, session_id: Optional[str] = None):
