@@ -30,7 +30,8 @@ import logging
 import schedule
 import time
 from concurrent.futures import ThreadPoolExecutor
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+# Stripe integration temporarily disabled
+# from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 import tweepy
 import asyncio
 import httpx
