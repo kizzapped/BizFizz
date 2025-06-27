@@ -350,9 +350,55 @@ class LocationPermission(BaseModel):
     push_notifications: bool = Field(default=True)
     privacy_level: str = Field(default="balanced")  # strict, balanced, open
     granted_at: datetime = Field(default_factory=datetime.utcnow)
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+class OpenTableReservation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    restaurant_id: str
+    restaurant_name: str
+    guest_name: str
+    guest_email: str
+    guest_phone: str
+    reservation_date: datetime
+    reservation_time: str
+    party_size: int
+    special_requests: Optional[str] = None
+    opentable_confirmation: Optional[str] = None
+    status: str = Field(default="pending")  # pending, confirmed, cancelled, completed
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-class PaymentTransaction(BaseModel):
+class RestaurantAvailability(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    restaurant_id: str
+    restaurant_name: str
+    opentable_id: Optional[str] = None
+    address: str
+    phone: str
+    cuisine_type: str
+    price_range: str = Field(default="$$")  # $, $$, $$$, $$$$
+    available_times: List[str] = Field(default_factory=list)
+    max_party_size: int = Field(default=8)
+    booking_url: str
+    rating: float = Field(default=0.0)
+    review_count: int = Field(default=0)
+    features: List[str] = Field(default_factory=list)  # outdoor seating, bar, etc.
+    distance_miles: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class ReservationQuery(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    query_text: str
+    desired_date: datetime
+    desired_time: Optional[str] = None
+    party_size: int
+    cuisine_preference: Optional[str] = None
+    price_range: Optional[str] = None
+    location: Optional[str] = None
+    max_distance: float = Field(default=10.0)  # miles
+    search_results: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     transaction_type: str  # subscription, advertisement, credits
