@@ -1164,6 +1164,7 @@ async def health_check():
         },
         "integrations": {
             "google_maps": bool(GOOGLE_MAPS_API_KEY),
+            "google_places": bool(GOOGLE_PLACES_API_KEY),
             "openai": bool(OPENAI_API_KEY),
             "yelp": bool(YELP_API_KEY),
             "stripe": bool(stripe_checkout),
