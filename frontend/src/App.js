@@ -35,6 +35,13 @@ function App() {
   const [comprehensiveAnalytics, setComprehensiveAnalytics] = useState(null);
   const [mobileNotifications, setMobileNotifications] = useState([]);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [newMonitoringRule, setNewMonitoringRule] = useState({
+    business_name: '',
+    keywords: '',
+    mentions: '',
+    hashtags: '',
+    platforms: ['twitter', 'facebook', 'google', 'news']
+  });
   const [userRegistration, setUserRegistration] = useState({
     email: '',
     password: '',
