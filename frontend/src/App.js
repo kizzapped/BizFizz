@@ -185,6 +185,42 @@ function App() {
     }
   };
 
+  const fetchRealTimeDashboard = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/analytics/realtime-dashboard/${currentUser.id}`);
+        const data = await response.json();
+        setRealTimeDashboard(data);
+      }
+    } catch (error) {
+      console.error('Error fetching real-time dashboard:', error);
+    }
+  };
+
+  const fetchComprehensiveAnalytics = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/analytics/comprehensive/${currentUser.id}?days=30&include_competitors=true&include_predictions=true`);
+        const data = await response.json();
+        setComprehensiveAnalytics(data);
+      }
+    } catch (error) {
+      console.error('Error fetching comprehensive analytics:', error);
+    }
+  };
+
+  const fetchMobileNotifications = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/mobile/notifications/${currentUser.id}?limit=20`);
+        const data = await response.json();
+        setMobileNotifications(data.notifications || []);
+      }
+    } catch (error) {
+      console.error('Error fetching mobile notifications:', error);
+    }
+  };
+
   const registerUser = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
