@@ -919,6 +919,20 @@ function App() {
                     Marketplace
                   </button>
                 )}
+                {userType === 'consumer' && (
+                  <button 
+                    onClick={() => setCurrentPage('reservations')}
+                    className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
+                  >
+                    <FaBuilding className="mr-1" />
+                    Reservations
+                    {userReservations.length > 0 && (
+                      <span className="ml-1 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {userReservations.length}
+                      </span>
+                    )}
+                  </button>
+                )}
                 <button 
                   onClick={() => setCurrentPage('pricing')}
                   className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
