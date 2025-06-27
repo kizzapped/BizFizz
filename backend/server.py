@@ -486,6 +486,75 @@ async def monitor_facebook(keywords: List[str], business_id: str, business_name:
         logger.error(f"Facebook monitoring error: {e}")
         return []
 
+async def monitor_google_reviews(keywords: List[str], business_id: str, business_name: str):
+    """Monitor Google Places/Reviews for business mentions"""
+    if not GOOGLE_PLACES_API_KEY:
+        logger.warning("Google Places API key not configured")
+        return []
+    
+    try:
+        mentions = []
+        
+        async with httpx.AsyncClient() as client:
+            # Search for the business first
+            search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+            search_params = {
+                "query": f"{business_name} restaurant",
+                "type": "restaurant",
+                "key": GOOGLE_PLACES_API_KEY
+            }
+            
+            search_response = await client.get(search_url, params=search_params)
+            if search_response.status_code == 200:
+                search_data = search_response.json()
+                
+                for place in search_data.get("results", []):
+                    place_id = place.get("place_id")
+                    
+                    if place_id:
+                        # Get place details including reviews
+                        details_url = "https://maps.googleapis.com/maps/api/place/details/json"
+                        details_params = {
+                            "place_id": place_id,
+                            "fields": "name,reviews,rating,user_ratings_total",
+                            "key": GOOGLE_PLACES_API_KEY
+                        }
+                        
+                        details_response = await client.get(details_url, params=details_params)
+                        if details_response.status_code == 200:
+                            details_data = details_response.json()
+                            place_details = details_data.get("result", {})
+                            
+                            for review in place_details.get("reviews", []):
+                                # Analyze sentiment
+                                sentiment = analyze_sentiment(review.get("text", ""))
+                                
+                                mention = SocialMention(
+                                    platform="google",
+                                    post_id=f"google_review_{review.get('time', '')}_{place_id}",
+                                    content=review.get("text", ""),
+                                    author_username=review.get("author_name", "Google User"),
+                                    sentiment_score=sentiment["sentiment_score"],
+                                    sentiment_label=sentiment["sentiment_label"],
+                                    business_id=business_id,
+                                    business_name=business_name,
+                                    keywords=keywords,
+                                    url=f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+                                    published_at=datetime.fromtimestamp(review.get("time", 0)) if review.get("time") else datetime.utcnow(),
+                                    engagement_metrics={
+                                        "rating": review.get("rating", 0),
+                                        "helpful": 0  # Google doesn't provide this in API
+                                    }
+                                )
+                                
+                                mentions.append(mention)
+        
+        return mentions
+        
+    except Exception as e:
+        logger.error(f"Google Places monitoring error: {e}")
+        return []
+
 async def monitor_news(keywords: List[str], business_id: str, business_name: str):
     """Monitor news sources for industry and business mentions"""
     if not NEWS_API_KEY:
