@@ -1362,8 +1362,8 @@ async def handle_review_requests(command_text: str, session: CorbySession):
             match = re.search(pattern, command_lower)
             if match:
                 if pattern_name == "leave_review":
+                    restaurant_name = match.group(1)
                     review_type = match.group(2)
-                    restaurant_name = match.group(3)
                 else:  # write_review
                     review_type = match.group(1)
                     restaurant_name = match.group(2)
