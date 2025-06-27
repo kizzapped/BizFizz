@@ -1160,8 +1160,8 @@ async def handle_advanced_menu_queries(command_text: str, session: CorbySession)
     try:
         # Enhanced menu search capabilities
         menu_query_patterns = {
-            "menu_items": r"restaurants?.*(with|offering|serving|have)\s+(.*?)(?:\s+and\s+(.*?))?(?:\s+dishes?|\s+food)?",
-            "price_comparison": r"(?:best price|cheapest|most affordable|lowest cost).*(?:for|on)\s+(.*?)(?:\s+at|\s+in)?",
+            "menu_items": r"restaurants?.*(with|offering|serving|have|offer)\s+(.*?)(?:\s+and\s+(.*?))?(?:\s+dishes?|\s+food|\s+meals?)?",
+            "price_comparison": r"(?:best price|cheapest|most affordable|lowest cost|best.*price).*(?:for|on)\s+(.*?)(?:\s+at|\s+in|\?|$)",
             "dietary_specific": r"(?:vegetarian|vegan|gluten.free|kosher|halal)\s+(?:options|restaurants|food)",
             "cuisine_combination": r"(.*?)\s+and\s+(.*?)\s+(?:restaurants?|cuisine|food)"
         }
