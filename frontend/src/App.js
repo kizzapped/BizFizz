@@ -1068,6 +1068,197 @@ function App() {
     </div>
   );
 
+  const AdvancedAnalyticsDashboard = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">📊 Advanced Analytics Dashboard</h2>
+          <p className="text-gray-600">AI-powered insights and comprehensive business intelligence</p>
+        </div>
+
+        {/* Real-time Status Cards */}
+        {realTimeDashboard && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-500">
+              <div className="flex items-center">
+                <FaBell className="text-red-500 text-2xl mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Critical Alerts</p>
+                  <p className="text-2xl font-bold text-gray-900">{realTimeDashboard.active_alerts}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-500">
+              <div className="flex items-center">
+                <FaComments className="text-blue-500 text-2xl mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Recent Mentions</p>
+                  <p className="text-2xl font-bold text-gray-900">{realTimeDashboard.recent_mentions}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-green-500">
+              <div className="flex items-center">
+                <FaChartLine className="text-green-500 text-2xl mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Status</p>
+                  <p className="text-lg font-bold text-gray-900 capitalize">{realTimeDashboard.status}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-purple-500">
+              <div className="flex items-center">
+                <FaClock className="text-purple-500 text-2xl mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Last Updated</p>
+                  <p className="text-sm text-gray-900">{new Date(realTimeDashboard.last_updated).toLocaleTimeString()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Comprehensive Analytics */}
+        {comprehensiveAnalytics && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            {/* Reputation Score */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <FaStar className="mr-2 text-yellow-500" />
+                Reputation Score
+              </h3>
+              <div className="text-center">
+                <div className={`text-6xl font-bold mb-2 ${
+                  comprehensiveAnalytics.reputation_score > 70 ? 'text-green-500' :
+                  comprehensiveAnalytics.reputation_score > 40 ? 'text-yellow-500' : 'text-red-500'
+                }`}>
+                  {comprehensiveAnalytics.reputation_score}%
+                </div>
+                <p className="text-gray-600">
+                  {comprehensiveAnalytics.reputation_score > 70 ? 'Excellent' :
+                   comprehensiveAnalytics.reputation_score > 40 ? 'Good' : 'Needs Improvement'}
+                </p>
+              </div>
+              
+              <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {comprehensiveAnalytics.social_performance.positive_mentions}
+                  </div>
+                  <div className="text-xs text-gray-500">Positive</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-gray-600">
+                    {comprehensiveAnalytics.social_performance.neutral_mentions}
+                  </div>
+                  <div className="text-xs text-gray-500">Neutral</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {comprehensiveAnalytics.social_performance.negative_mentions}
+                  </div>
+                  <div className="text-xs text-gray-500">Negative</div>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Insights */}
+            {comprehensiveAnalytics.ai_insights && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-xl font-semibold mb-4 flex items-center">
+                  <FaBrain className="mr-2 text-purple-500" />
+                  AI-Powered Insights
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Key Insights</h4>
+                    <ul className="space-y-2">
+                      {comprehensiveAnalytics.ai_insights.insights?.map((insight, index) => (
+                        <li key={index} className="flex items-start">
+                          <FaLightbulb className="text-yellow-500 mr-2 mt-1 flex-shrink-0" />
+                          <span className="text-sm text-gray-700">{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Action Items</h4>
+                    <ul className="space-y-2">
+                      {comprehensiveAnalytics.ai_insights.action_items?.map((action, index) => (
+                        <li key={index} className="flex items-start">
+                          <FaTarget className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
+                          <span className="text-sm text-gray-700">{action}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Platform Activity */}
+        {realTimeDashboard?.platform_activity && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h3 className="text-xl font-semibold mb-4">📱 Platform Activity (Last 24 Hours)</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {realTimeDashboard.platform_activity.map((platform) => (
+                <div key={platform._id} className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className={`inline-block w-4 h-4 rounded-full mb-2 ${
+                    platform._id === 'twitter' ? 'bg-blue-500' :
+                    platform._id === 'facebook' ? 'bg-blue-700' :
+                    platform._id === 'google' ? 'bg-red-500' :
+                    platform._id === 'news' ? 'bg-gray-600' : 'bg-green-500'
+                  }`}></div>
+                  <div className="text-lg font-bold">{platform.count}</div>
+                  <div className="text-sm text-gray-600 capitalize">{platform._id}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(platform.latest).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Sentiment Timeline */}
+        {realTimeDashboard?.sentiment_trend && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4">💭 Live Sentiment Feed</h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {realTimeDashboard.sentiment_trend.slice(0, 10).map((item, index) => (
+                <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <div className={`w-3 h-3 rounded-full mt-2 ${
+                    item.sentiment_score > 0.1 ? 'bg-green-500' :
+                    item.sentiment_score < -0.1 ? 'bg-red-500' : 'bg-gray-500'
+                  }`}></div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium capitalize">{item.platform}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(item.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700">{item.content}</p>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Sentiment: {item.sentiment_score.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const SocialMonitoringPage = () => (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
