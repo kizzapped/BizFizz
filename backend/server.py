@@ -1973,6 +1973,219 @@ async def get_mobile_notifications(business_id: str, limit: int = 10):
         logger.error(f"Mobile notifications error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get notifications")
 
+# OpenTable Reservation API Endpoints
+
+@app.post("/api/restaurants/search")
+async def search_restaurants_availability(query_data: dict):
+    """Search for restaurants with availability"""
+    try:
+        query = query_data.get("query", "")
+        date = query_data.get("date", "")
+        time = query_data.get("time", "19:00")
+        party_size = query_data.get("party_size", 2)
+        location = query_data.get("location")
+        cuisine = query_data.get("cuisine")
+        max_distance = query_data.get("max_distance", 10.0)
+        
+        if not query or not date:
+            raise HTTPException(status_code=400, detail="Query and date are required")
+        
+        # Create query record
+        reservation_query = ReservationQuery(
+            user_id=query_data.get("user_id", "anonymous"),
+            query_text=query,
+            desired_date=datetime.fromisoformat(date.replace("Z", "+00:00")),
+            desired_time=time,
+            party_size=party_size,
+            cuisine_preference=cuisine,
+            location=location,
+            max_distance=max_distance
+        )
+        
+        # Search for restaurants
+        restaurants = await search_restaurants_with_availability(
+            query, date, time, party_size, location, max_distance
+        )
+        
+        # Update query with results
+        reservation_query.search_results = [r.dict() for r in restaurants]
+        await db.reservation_queries.insert_one(reservation_query.dict())
+        
+        return {
+            "query_id": reservation_query.id,
+            "restaurants": [r.dict() for r in restaurants],
+            "total_found": len(restaurants),
+            "search_location": location,
+            "search_criteria": {
+                "date": date,
+                "time": time,
+                "party_size": party_size,
+                "cuisine": cuisine
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Restaurant search error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to search restaurants")
+
+@app.post("/api/reservations/create")
+async def create_restaurant_reservation(reservation_data: dict):
+    """Create a new restaurant reservation"""
+    try:
+        required_fields = ["user_id", "restaurant_id", "guest_name", "guest_email", 
+                          "guest_phone", "reservation_date", "reservation_time", "party_size"]
+        
+        for field in required_fields:
+            if field not in reservation_data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Parse date
+        reservation_data["reservation_date"] = datetime.fromisoformat(
+            reservation_data["reservation_date"].replace("Z", "+00:00")
+        )
+        
+        # Create reservation
+        reservation = await create_reservation_with_opentable(reservation_data)
+        
+        # Send confirmation to user
+        confirmation_message = f"""
+🍽️ Reservation Confirmed!
+
+Restaurant: {reservation.restaurant_name}
+Date: {reservation.reservation_date.strftime('%B %d, %Y')}
+Time: {reservation.reservation_time}
+Party Size: {reservation.party_size}
+Confirmation: {reservation.id[:8]}
+
+Thank you for using BizFizz! 🎉
+        """.strip()
+        
+        return {
+            "message": "Reservation created successfully",
+            "reservation_id": reservation.id,
+            "confirmation": reservation.id[:8],
+            "status": reservation.status,
+            "opentable_confirmation": reservation.opentable_confirmation,
+            "confirmation_message": confirmation_message
+        }
+        
+    except Exception as e:
+        logger.error(f"Reservation creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create reservation")
+
+@app.get("/api/reservations/{user_id}")
+async def get_user_reservations(user_id: str):
+    """Get all reservations for a user"""
+    try:
+        reservations = []
+        async for reservation in db.opentable_reservations.find({"user_id": user_id}).sort("reservation_date", -1):
+            if "_id" in reservation:
+                del reservation["_id"]
+            reservations.append(reservation)
+        
+        return {"reservations": reservations, "total": len(reservations)}
+        
+    except Exception as e:
+        logger.error(f"Get reservations error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get reservations")
+
+@app.put("/api/reservations/{reservation_id}/cancel")
+async def cancel_reservation(reservation_id: str):
+    """Cancel a reservation"""
+    try:
+        reservation = await db.opentable_reservations.find_one({"id": reservation_id})
+        if not reservation:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+        
+        # Update status
+        await db.opentable_reservations.update_one(
+            {"id": reservation_id},
+            {"$set": {"status": "cancelled", "updated_at": datetime.utcnow()}}
+        )
+        
+        # Notify restaurant
+        await manager.send_personal_message(
+            json.dumps({
+                "type": "reservation_cancelled",
+                "title": "Reservation Cancelled",
+                "message": f"Reservation for {reservation['guest_name']} on {reservation['reservation_date']} has been cancelled",
+                "reservation_id": reservation_id
+            }),
+            reservation["restaurant_id"]
+        )
+        
+        return {"message": "Reservation cancelled successfully"}
+        
+    except Exception as e:
+        logger.error(f"Cancel reservation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to cancel reservation")
+
+@app.get("/api/restaurants/{restaurant_id}/reservations")
+async def get_restaurant_reservations(restaurant_id: str, date: Optional[str] = None):
+    """Get reservations for a restaurant"""
+    try:
+        query = {"restaurant_id": restaurant_id}
+        
+        if date:
+            target_date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_day = start_of_day + timedelta(days=1)
+            query["reservation_date"] = {"$gte": start_of_day, "$lt": end_of_day}
+        
+        reservations = []
+        async for reservation in db.opentable_reservations.find(query).sort("reservation_date", 1):
+            if "_id" in reservation:
+                del reservation["_id"]
+            reservations.append(reservation)
+        
+        return {"reservations": reservations, "total": len(reservations), "date": date}
+        
+    except Exception as e:
+        logger.error(f"Get restaurant reservations error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get restaurant reservations")
+
+@app.post("/api/reservations/availability-check")
+async def check_availability(availability_data: dict):
+    """Check availability for specific restaurant, date, and time"""
+    try:
+        restaurant_id = availability_data.get("restaurant_id")
+        date = availability_data.get("date")
+        time = availability_data.get("time")
+        party_size = availability_data.get("party_size", 2)
+        
+        if not all([restaurant_id, date, time]):
+            raise HTTPException(status_code=400, detail="Restaurant ID, date, and time required")
+        
+        # Check existing reservations
+        target_datetime = datetime.fromisoformat(f"{date}T{time}")
+        existing_reservations = await db.opentable_reservations.count_documents({
+            "restaurant_id": restaurant_id,
+            "reservation_date": target_datetime,
+            "status": {"$nin": ["cancelled"]}
+        })
+        
+        # Simulate capacity check (in production, use actual restaurant capacity)
+        max_capacity = 10  # Tables per time slot
+        available = existing_reservations < max_capacity
+        
+        # Get restaurant info
+        restaurant = await db.businesses.find_one({"id": restaurant_id})
+        
+        return {
+            "available": available,
+            "restaurant_name": restaurant.get("name", "Unknown") if restaurant else "Unknown",
+            "date": date,
+            "time": time,
+            "party_size": party_size,
+            "existing_reservations": existing_reservations,
+            "capacity": max_capacity,
+            "message": "Available" if available else "Fully booked for this time"
+        }
+        
+    except Exception as e:
+        logger.error(f"Availability check error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to check availability")
+
 # Location-Based Marketing API Endpoints
 
 @app.post("/api/location/update")
