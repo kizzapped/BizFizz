@@ -1503,6 +1503,246 @@ function App() {
     </div>
   );
 
+  const ProximityMarketingPage = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">📍 Proximity Marketing</h2>
+          <p className="text-gray-600">Target customers when they're near your restaurant with instant promotions</p>
+        </div>
+
+        {/* Create New Campaign */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h3 className="text-xl font-semibold mb-4 flex items-center">
+            <FaRocket className="mr-2 text-blue-500" />
+            Create New Promotional Campaign
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="Campaign Name"
+              value={newCampaign.campaign_name}
+              onChange={(e) => setNewCampaign({...newCampaign, campaign_name: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              placeholder="Promo Code"
+              value={newCampaign.promo_code}
+              onChange={(e) => setNewCampaign({...newCampaign, promo_code: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <textarea
+              placeholder="Promotional Message (e.g., '20% off your next meal!')"
+              value={newCampaign.promo_message}
+              onChange={(e) => setNewCampaign({...newCampaign, promo_message: e.target.value})}
+              className="border rounded px-3 py-2 col-span-2"
+              rows="2"
+            />
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                placeholder="Discount Amount"
+                value={newCampaign.discount_amount}
+                onChange={(e) => setNewCampaign({...newCampaign, discount_amount: e.target.value})}
+                className="border rounded px-3 py-2 flex-1"
+              />
+              <select
+                value={newCampaign.discount_type}
+                onChange={(e) => setNewCampaign({...newCampaign, discount_type: e.target.value})}
+                className="border rounded px-3 py-2"
+              >
+                <option value="percentage">%</option>
+                <option value="fixed">$</option>
+                <option value="bogo">BOGO</option>
+              </select>
+            </div>
+            <input
+              type="datetime-local"
+              value={newCampaign.valid_until}
+              onChange={(e) => setNewCampaign({...newCampaign, valid_until: e.target.value})}
+              className="border rounded px-3 py-2"
+            />
+            <input
+              type="number"
+              placeholder="Max Uses"
+              value={newCampaign.max_uses}
+              onChange={(e) => setNewCampaign({...newCampaign, max_uses: parseInt(e.target.value)})}
+              className="border rounded px-3 py-2"
+            />
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                step="0.1"
+                placeholder="Target Radius"
+                value={newCampaign.target_radius}
+                onChange={(e) => setNewCampaign({...newCampaign, target_radius: parseFloat(e.target.value)})}
+                className="border rounded px-3 py-2 flex-1"
+              />
+              <span className="text-sm text-gray-600">miles</span>
+            </div>
+          </div>
+          
+          <div className="mb-4 flex space-x-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={newCampaign.send_sms}
+                onChange={(e) => setNewCampaign({...newCampaign, send_sms: e.target.checked})}
+                className="mr-2"
+              />
+              <span className="text-sm">Send SMS</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={newCampaign.send_push}
+                onChange={(e) => setNewCampaign({...newCampaign, send_push: e.target.checked})}
+                className="mr-2"
+              />
+              <span className="text-sm">Send Push Notifications</span>
+            </label>
+          </div>
+          
+          <button
+            onClick={createPromotionalCampaign}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            🚀 Launch Campaign
+          </button>
+        </div>
+
+        {/* Live Nearby Customers */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaMapMarkerAlt className="mr-2 text-green-500" />
+              Customers Nearby Right Now ({nearbyUsers.length})
+            </h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {nearbyUsers.map((user) => (
+                <div key={user.user_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-medium">{user.name}</p>
+                      <p className="text-sm text-gray-600">{user.distance_miles} miles away</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">
+                      {new Date(user.last_seen).toLocaleTimeString()}
+                    </p>
+                    <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                  </div>
+                </div>
+              ))}
+              {nearbyUsers.length === 0 && (
+                <p className="text-gray-500 text-center">No customers nearby at the moment</p>
+              )}
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Tip:</strong> Create promotional campaigns to automatically reach customers when they're nearby!
+              </p>
+            </div>
+          </div>
+
+          {/* Active Campaigns */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaBell className="mr-2 text-orange-500" />
+              Active Campaigns ({promotionalCampaigns.filter(c => c.is_active).length})
+            </h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {promotionalCampaigns.filter(c => c.is_active).map((campaign) => (
+                <div key={campaign.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold">{campaign.campaign_name}</h4>
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      ACTIVE
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-2">{campaign.promo_message}</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <span>Code: {campaign.promo_code}</span>
+                    <span>Uses: {campaign.current_uses}/{campaign.max_uses}</span>
+                    <span>Radius: {(campaign.target_radius / 1609.34).toFixed(1)} miles</span>
+                    <span>Expires: {new Date(campaign.valid_until).toLocaleDateString()}</span>
+                  </div>
+                  
+                  {campaign.performance && (
+                    <div className="mt-3 pt-3 border-t">
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-lg font-bold text-blue-600">{campaign.performance.total_sent}</div>
+                          <div className="text-xs text-gray-500">Sent</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-green-600">{campaign.performance.opened}</div>
+                          <div className="text-xs text-gray-500">Opened</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-orange-600">{campaign.performance.redeemed}</div>
+                          <div className="text-xs text-gray-500">Redeemed</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {promotionalCampaigns.filter(c => c.is_active).length === 0 && (
+                <p className="text-gray-500 text-center">No active campaigns</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Campaign Performance */}
+        {promotionalCampaigns.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center">
+              <FaChartLine className="mr-2 text-purple-500" />
+              Campaign Performance Overview
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">
+                  {promotionalCampaigns.reduce((sum, c) => sum + (c.performance?.total_sent || 0), 0)}
+                </div>
+                <div className="text-sm text-gray-600">Total Promotions Sent</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">
+                  {promotionalCampaigns.reduce((sum, c) => sum + (c.performance?.opened || 0), 0)}
+                </div>
+                <div className="text-sm text-gray-600">Total Opened</div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">
+                  {promotionalCampaigns.reduce((sum, c) => sum + (c.performance?.redeemed || 0), 0)}
+                </div>
+                <div className="text-sm text-gray-600">Total Redeemed</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">
+                  {promotionalCampaigns.length > 0 ? 
+                    ((promotionalCampaigns.reduce((sum, c) => sum + (c.performance?.redemption_rate || 0), 0) / 
+                      promotionalCampaigns.length).toFixed(1)) : '0'}%
+                </div>
+                <div className="text-sm text-gray-600">Avg Redemption Rate</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const SocialMonitoringPage = () => (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
