@@ -31,13 +31,10 @@ function App() {
   const [monitoringRules, setMonitoringRules] = useState([]);
   const [socialAnalytics, setSocialAnalytics] = useState(null);
   const [newsArticles, setNewsArticles] = useState([]);
-  const [newMonitoringRule, setNewMonitoringRule] = useState({
-    business_name: '',
-    keywords: '',
-    mentions: '',
-    hashtags: '',
-    platforms: ['twitter', 'facebook', 'news']
-  });
+  const [realTimeDashboard, setRealTimeDashboard] = useState(null);
+  const [comprehensiveAnalytics, setComprehensiveAnalytics] = useState(null);
+  const [mobileNotifications, setMobileNotifications] = useState([]);
+  const [isMobileView, setIsMobileView] = useState(false);
   const [userRegistration, setUserRegistration] = useState({
     email: '',
     password: '',
