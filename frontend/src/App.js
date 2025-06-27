@@ -1882,6 +1882,203 @@ function App() {
     </div>
   );
 
+  const CorbyVoiceAssistant = () => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">🎙️ Meet Corby, Your Voice Assistant</h2>
+          <p className="text-gray-600">Ask Corby to find restaurants, check availability, or make reservations - all with your voice!</p>
+        </div>
+
+        {/* Voice Interface */}
+        <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
+          <div className="text-center">
+            {/* Corby Avatar */}
+            <div className={`mx-auto w-32 h-32 rounded-full flex items-center justify-center mb-6 transition-all duration-300 ${
+              isListening ? 'bg-blue-500 animate-pulse' : 
+              isSpeaking ? 'bg-green-500 animate-bounce' : 
+              'bg-gray-200'
+            }`}>
+              <span className="text-4xl text-white">🤖</span>
+            </div>
+            
+            {/* Status */}
+            <div className="mb-6">
+              {isListening && (
+                <p className="text-blue-600 font-medium animate-pulse">🎙️ Listening...</p>
+              )}
+              {isSpeaking && (
+                <p className="text-green-600 font-medium">🔊 Speaking...</p>
+              )}
+              {!isListening && !isSpeaking && (
+                <p className="text-gray-600">Ready to help! Tap the microphone and start talking.</p>
+              )}
+            </div>
+            
+            {/* Voice Controls */}
+            <div className="flex justify-center space-x-4 mb-6">
+              <button
+                onClick={startListening}
+                disabled={isListening || !voiceSupported}
+                className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all ${
+                  isListening ? 'bg-red-500 text-white cursor-not-allowed' :
+                  'bg-blue-500 hover:bg-blue-600 text-white hover:scale-110'
+                } ${!voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                🎙️
+              </button>
+              
+              {isSpeaking && (
+                <button
+                  onClick={stopSpeaking}
+                  className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-2xl transition-all hover:scale-110"
+                >
+                  🔇
+                </button>
+              )}
+              
+              {conversationHistory.length > 0 && (
+                <button
+                  onClick={clearConversation}
+                  className="w-16 h-16 rounded-full bg-gray-500 hover:bg-gray-600 text-white flex items-center justify-center text-2xl transition-all hover:scale-110"
+                >
+                  🗑️
+                </button>
+              )}
+            </div>
+
+            {!voiceSupported && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <p className="text-yellow-800 text-sm">
+                  ⚠️ Voice recognition not supported in your browser. Try Chrome, Edge, or Safari for the best experience.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Commands */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h3 className="text-xl font-semibold mb-4">💡 Try These Voice Commands</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {quickVoiceCommands.map((command, index) => (
+              <button
+                key={index}
+                onClick={() => processVoiceCommand(command.replace("Hey Corby, ", ""))}
+                className="text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+              >
+                <span className="text-blue-600 text-sm font-medium">"{command}"</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Conversation History */}
+        {conversationHistory.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">💬 Conversation with Corby</h3>
+              <span className="text-sm text-gray-500">{conversationHistory.length} messages</span>
+            </div>
+            
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {conversationHistory.map((message, index) => (
+                <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.type === 'user' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <div className="flex items-center mb-1">
+                      <span className="text-xs font-medium">
+                        {message.type === 'user' ? '👤 You' : '🤖 Corby'}
+                      </span>
+                      <span className="text-xs opacity-75 ml-2">{message.timestamp}</span>
+                    </div>
+                    <p className="text-sm">{message.message}</p>
+                    {message.intent && message.intent !== 'general_query' && (
+                      <div className="text-xs opacity-75 mt-1">
+                        Intent: {message.intent.replace('_', ' ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Voice Replay Button */}
+            {corbyResponse && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={() => speakResponse(corbyResponse)}
+                  disabled={isSpeaking}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                >
+                  🔊 Replay Last Response
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Voice Settings */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mt-8">
+          <h3 className="text-lg font-semibold mb-4">🎛️ Voice Settings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Speech Rate</label>
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={voiceSettings.rate}
+                onChange={(e) => setVoiceSettings({...voiceSettings, rate: parseFloat(e.target.value)})}
+                className="w-full"
+              />
+              <span className="text-xs text-gray-500">{voiceSettings.rate}x</span>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Pitch</label>
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={voiceSettings.pitch}
+                onChange={(e) => setVoiceSettings({...voiceSettings, pitch: parseFloat(e.target.value)})}
+                className="w-full"
+              />
+              <span className="text-xs text-gray-500">{voiceSettings.pitch}</span>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Volume</label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={voiceSettings.volume}
+                onChange={(e) => setVoiceSettings({...voiceSettings, volume: parseFloat(e.target.value)})}
+                className="w-full"
+              />
+              <span className="text-xs text-gray-500">{Math.round(voiceSettings.volume * 100)}%</span>
+            </div>
+          </div>
+          
+          <div className="mt-4">
+            <button
+              onClick={() => speakResponse("Hello! I'm Corby, your personal restaurant assistant. How can I help you today?")}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            >
+              🎵 Test Voice Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const OpenTableReservationsPage = () => (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
