@@ -4703,51 +4703,11 @@ async def create_checkout_session(request: Dict[str, Any]):
     raise HTTPException(status_code=503, detail="Payment processing temporarily disabled")
 
 @app.get("/api/payments/checkout-status/{session_id}")
+# Temporarily disable Stripe integration
 async def get_checkout_status(session_id: str):
-    """Get checkout session status"""
-    try:
-        if not stripe_checkout:
-            raise HTTPException(status_code=503, detail="Payment processing not available")
-        
-        status = await stripe_checkout.get_checkout_status(session_id)
-        
-        # Update local transaction
-        await update_payment_status(session_id, status.status, status.payment_status)
-        
-        # If payment successful, update user
-        if status.payment_status == "paid":
-            transaction = await db.payment_transactions.find_one({"stripe_session_id": session_id})
-            if transaction and transaction.get("payment_status") != "paid":
-                user_id = transaction["metadata"]["user_id"]
-                package_type = transaction["metadata"]["package_type"]
-                package_id = transaction["metadata"]["package_id"]
-                
-                if package_type == "subscription":
-                    package = SUBSCRIPTION_PACKAGES[package_id]
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {
-                            "$set": {
-                                "subscription_tier": package_id,
-                                "credits": package.get("credits", 0),
-                                "subscription_status": "active"
-                            }
-                        }
-                    )
-                
-                # Mark transaction as processed
-                await update_payment_status(session_id, status.status, "paid")
-        
-        return {
-            "status": status.status,
-            "payment_status": status.payment_status,
-            "amount_total": status.amount_total,
-            "currency": status.currency
-        }
-        
-    except Exception as e:
-        logger.error(f"Get checkout status error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get checkout status")
+    """Get checkout session status - temporarily disabled"""
+    logger.warning("Stripe integration is temporarily disabled")
+    raise HTTPException(status_code=503, detail="Payment processing temporarily disabled")
 
 # Business Advertising
 @app.post("/api/advertisements")
