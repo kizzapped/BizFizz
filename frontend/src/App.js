@@ -91,6 +91,41 @@ function App() {
       fetchNewsArticles();
       fetchMobileNotifications();
       
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      
+      // Location-based features
+      if (currentUser.user_type === 'consumer') {
+        // Auto-request location for consumers (for promotional offers)
+        setTimeout(() => {
+          if (!locationPermission) {
+            const shouldRequest = window.confirm(
+              '🎯 Enable location to receive exclusive offers from nearby restaurants?\n\n' +
+              '• Get special discounts when you\'re near restaurants\n' +
+              '• Receive personalized promotions\n' +
+              '• Never miss a great deal!\n\n' +
+              'You can disable this anytime in settings.'
+            );
+            
+            if (shouldRequest) {
+              requestLocationPermission();
+            }
+          }
+        }, 3000);
+      } else if (currentUser.user_type === 'business') {
+        fetchPromotionalCampaigns();
+        fetchNearbyUsers();
+        
+        // Auto-refresh nearby users every 30 seconds for businesses
+        const nearbyInterval = setInterval(() => {
+          fetchNearbyUsers();
+        }, 30000);
+        
+        return () => clearInterval(nearbyInterval);
+      }
+      
       if (currentUser.user_type === 'business') {
         fetchSocialAnalytics();
         fetchRealTimeDashboard();
