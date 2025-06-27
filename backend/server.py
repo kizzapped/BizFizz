@@ -505,6 +505,324 @@ ADVERTISING_PACKAGES = {
     "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
 }
 
+# OpenTable Integration Functions
+
+OPENTABLE_CLIENT_ID = os.environ.get('OPENTABLE_CLIENT_ID')
+OPENTABLE_CLIENT_SECRET = os.environ.get('OPENTABLE_CLIENT_SECRET')
+OPENTABLE_API_BASE = "https://platform.opentable.com"
+
+async def search_restaurants_with_availability(
+    query: str, 
+    date: str, 
+    time: str, 
+    party_size: int,
+    location: Optional[str] = None,
+    max_distance: float = 10.0
+) -> List[RestaurantAvailability]:
+    """Search for restaurants with availability using multiple sources"""
+    try:
+        restaurants = []
+        
+        # Method 1: Check our database for partner restaurants
+        partner_restaurants = []
+        async for restaurant in db.businesses.find({
+            "user_type": "business",
+            "$or": [
+                {"name": {"$regex": query, "$options": "i"}},
+                {"cuisine_type": {"$regex": query, "$options": "i"}},
+                {"description": {"$regex": query, "$options": "i"}}
+            ]
+        }).limit(10):
+            partner_restaurants.append(restaurant)
+        
+        # Convert partner restaurants to availability format
+        for restaurant in partner_restaurants:
+            # Generate mock availability times (in real implementation, this would check actual availability)
+            available_times = []
+            base_hour = int(time.split(':')[0]) if time else 19
+            for hour_offset in [-1, 0, 1, 2]:
+                check_hour = base_hour + hour_offset
+                if 17 <= check_hour <= 22:  # Restaurant hours 5 PM - 10 PM
+                    available_times.append(f"{check_hour:02d}:00")
+                    available_times.append(f"{check_hour:02d}:30")
+            
+            restaurant_availability = RestaurantAvailability(
+                restaurant_id=restaurant["id"],
+                restaurant_name=restaurant["name"],
+                address=restaurant.get("address", "Address not available"),
+                phone=restaurant.get("phone", "Phone not available"),
+                cuisine_type=restaurant.get("cuisine_type", "Restaurant"),
+                price_range=restaurant.get("price_range", "$$"),
+                available_times=available_times,
+                booking_url=f"/book-table/{restaurant['id']}",
+                rating=restaurant.get("rating", 4.2),
+                review_count=restaurant.get("review_count", 150),
+                features=restaurant.get("features", ["Dine-in", "Takeout"]),
+                latitude=restaurant.get("latitude"),
+                longitude=restaurant.get("longitude")
+            )
+            
+            restaurants.append(restaurant_availability)
+        
+        # Method 2: OpenTable API integration (if available)
+        if OPENTABLE_CLIENT_ID and OPENTABLE_CLIENT_SECRET:
+            try:
+                opentable_restaurants = await search_opentable_api(query, date, time, party_size)
+                restaurants.extend(opentable_restaurants)
+            except Exception as e:
+                logger.warning(f"OpenTable API search failed: {e}")
+        
+        # Method 3: Web scraping fallback (simplified for demo)
+        web_scraped_restaurants = await search_restaurants_web_fallback(query, location)
+        restaurants.extend(web_scraped_restaurants)
+        
+        # Sort by distance and rating
+        if location:
+            restaurants = await calculate_distances(restaurants, location)
+            restaurants = [r for r in restaurants if r.distance_miles <= max_distance]
+        
+        restaurants.sort(key=lambda x: (x.distance_miles or 999, -x.rating))
+        
+        return restaurants[:20]  # Return top 20 results
+        
+    except Exception as e:
+        logger.error(f"Restaurant search error: {e}")
+        return []
+
+async def search_opentable_api(query: str, date: str, time: str, party_size: int):
+    """Search OpenTable API for restaurants (when API access is available)"""
+    try:
+        # Get OAuth token
+        token = await get_opentable_oauth_token()
+        if not token:
+            return []
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Search for restaurants
+        search_url = f"{OPENTABLE_API_BASE}/v1/restaurants/search"
+        params = {
+            "q": query,
+            "date": date,
+            "time": time,
+            "party_size": party_size,
+            "limit": 10
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(search_url, headers=headers, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                restaurants = []
+                
+                for restaurant in data.get("restaurants", []):
+                    restaurant_availability = RestaurantAvailability(
+                        restaurant_id=restaurant.get("id", ""),
+                        restaurant_name=restaurant.get("name", ""),
+                        opentable_id=restaurant.get("opentable_id"),
+                        address=restaurant.get("address", ""),
+                        phone=restaurant.get("phone", ""),
+                        cuisine_type=restaurant.get("cuisine", ""),
+                        available_times=restaurant.get("available_times", []),
+                        booking_url=restaurant.get("booking_url", ""),
+                        rating=restaurant.get("rating", 0.0),
+                        review_count=restaurant.get("review_count", 0),
+                        latitude=restaurant.get("lat"),
+                        longitude=restaurant.get("lng")
+                    )
+                    restaurants.append(restaurant_availability)
+                
+                return restaurants
+        
+        return []
+        
+    except Exception as e:
+        logger.error(f"OpenTable API search error: {e}")
+        return []
+
+async def get_opentable_oauth_token():
+    """Get OAuth token for OpenTable API"""
+    try:
+        if not OPENTABLE_CLIENT_ID or not OPENTABLE_CLIENT_SECRET:
+            return None
+        
+        auth_string = f"{OPENTABLE_CLIENT_ID}:{OPENTABLE_CLIENT_SECRET}"
+        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+        
+        headers = {
+            "Authorization": f"Basic {encoded_auth}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        data = {"grant_type": "client_credentials"}
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth.opentable.com/api/v2/oauth/token",
+                headers=headers,
+                data=data
+            )
+            
+            if response.status_code == 200:
+                return response.json().get("access_token")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"OpenTable OAuth error: {e}")
+        return None
+
+async def search_restaurants_web_fallback(query: str, location: Optional[str] = None):
+    """Fallback method using web scraping or public APIs"""
+    try:
+        restaurants = []
+        
+        # Simulate web scraping results (in production, use actual scraping)
+        mock_restaurants = [
+            {
+                "name": f"The {query.title()} Place",
+                "address": "123 Main St, City, State",
+                "phone": "(555) 123-4567",
+                "cuisine": query.lower(),
+                "rating": 4.3,
+                "price_range": "$$"
+            },
+            {
+                "name": f"{query.title()} Garden",
+                "address": "456 Oak Ave, City, State",
+                "phone": "(555) 234-5678",
+                "cuisine": query.lower(),
+                "rating": 4.1,
+                "price_range": "$$$"
+            }
+        ]
+        
+        for mock_restaurant in mock_restaurants:
+            # Generate available times
+            available_times = ["18:00", "18:30", "19:00", "19:30", "20:00", "20:30"]
+            
+            restaurant = RestaurantAvailability(
+                restaurant_id=f"web_{hash(mock_restaurant['name']) % 10000}",
+                restaurant_name=mock_restaurant["name"],
+                address=mock_restaurant["address"],
+                phone=mock_restaurant["phone"],
+                cuisine_type=mock_restaurant["cuisine"],
+                price_range=mock_restaurant["price_range"],
+                available_times=available_times,
+                booking_url=f"https://www.opentable.com/r/{mock_restaurant['name'].lower().replace(' ', '-')}",
+                rating=mock_restaurant["rating"],
+                review_count=random.randint(50, 300)
+            )
+            
+            restaurants.append(restaurant)
+        
+        return restaurants
+        
+    except Exception as e:
+        logger.error(f"Web fallback search error: {e}")
+        return []
+
+async def calculate_distances(restaurants: List[RestaurantAvailability], user_location: str):
+    """Calculate distances from user location to restaurants"""
+    try:
+        # In production, use Google Maps Geocoding API to get coordinates
+        # For now, assign random distances for demo
+        for restaurant in restaurants:
+            if not restaurant.distance_miles:
+                restaurant.distance_miles = round(random.uniform(0.5, 8.0), 1)
+        
+        return restaurants
+        
+    except Exception as e:
+        logger.error(f"Distance calculation error: {e}")
+        return restaurants
+
+async def create_reservation_with_opentable(reservation_data: dict):
+    """Create reservation using OpenTable API or direct booking"""
+    try:
+        reservation = OpenTableReservation(**reservation_data)
+        
+        # Method 1: Try OpenTable API if available
+        if OPENTABLE_CLIENT_ID and reservation_data.get("opentable_id"):
+            opentable_result = await book_via_opentable_api(reservation_data)
+            if opentable_result:
+                reservation.opentable_confirmation = opentable_result.get("confirmation_id")
+                reservation.status = "confirmed"
+        
+        # Method 2: Store in our database regardless
+        await db.opentable_reservations.insert_one(reservation.dict())
+        
+        # Method 3: Send notification to restaurant (if it's our partner)
+        restaurant = await db.businesses.find_one({"id": reservation.restaurant_id})
+        if restaurant:
+            await manager.send_personal_message(
+                json.dumps({
+                    "type": "new_reservation",
+                    "title": "New Reservation!",
+                    "reservation": reservation.dict(),
+                    "guest_info": {
+                        "name": reservation.guest_name,
+                        "party_size": reservation.party_size,
+                        "time": reservation.reservation_time
+                    }
+                }),
+                reservation.restaurant_id
+            )
+        
+        return reservation
+        
+    except Exception as e:
+        logger.error(f"Reservation creation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create reservation")
+
+async def book_via_opentable_api(reservation_data: dict):
+    """Book directly via OpenTable API"""
+    try:
+        token = await get_opentable_oauth_token()
+        if not token:
+            return None
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        booking_data = {
+            "restaurant_id": reservation_data.get("opentable_id"),
+            "party_size": reservation_data["party_size"],
+            "date_time": f"{reservation_data['reservation_date']}T{reservation_data['reservation_time']}",
+            "customer": {
+                "first_name": reservation_data["guest_name"].split()[0],
+                "last_name": " ".join(reservation_data["guest_name"].split()[1:]) or "",
+                "email": reservation_data["guest_email"],
+                "phone": reservation_data["guest_phone"]
+            },
+            "special_requests": reservation_data.get("special_requests", "")
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{OPENTABLE_API_BASE}/v1/reservations",
+                headers=headers,
+                json=booking_data
+            )
+            
+            if response.status_code in [200, 201]:
+                return response.json()
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"OpenTable API booking error: {e}")
+        return None
+
+import random
+import base64
+
 # Geolocation and Proximity Functions
 import math
 
