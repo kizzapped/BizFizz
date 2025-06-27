@@ -1626,47 +1626,7 @@ async def handle_review_requests(command_text: str, session: CorbySession):
         logger.error(f"Review request error: {e}")
         return None
 
-async def find_dietary_restaurants(dietary_type: str, session: CorbySession):
-    """Find restaurants with specific dietary options"""
-    try:
-        dietary_mapping = {
-            "vegetarian": "vegetarian-friendly restaurants",
-            "vegan": "vegan restaurants", 
-            "gluten-free": "gluten-free restaurants",
-            "kosher": "kosher restaurants",
-            "halal": "halal restaurants"
-        }
-        
-        search_term = dietary_mapping.get(dietary_type, f"{dietary_type} restaurants")
-        
-        # Search for restaurants
-        restaurants = await search_restaurants_with_availability(
-            search_term,
-            datetime.now().strftime("%Y-%m-%d"),
-            "19:00",
-            2,
-            session.context.get("location", "near me")
-        )
-        
-        if restaurants:
-            restaurant_names = [f"{r.restaurant_name} ({r.rating} stars)" for r in restaurants[:3]]
-            response_text = f"Perfect! I found {len(restaurants)} {dietary_type} restaurants nearby: {', '.join(restaurant_names)}. Would you like me to check their specific {dietary_type} menu options or make a reservation?"
-        else:
-            response_text = f"I'm still building my database of {dietary_type} restaurants in your area. Would you like me to search for restaurants that typically accommodate {dietary_type} diets?"
-        
-        return {
-            "response_text": response_text,
-            "action_taken": f"dietary_search_{dietary_type}",
-            "was_successful": len(restaurants) > 0,
-            "data": {"restaurants": [r.dict() for r in restaurants[:5]] if restaurants else []}
-        }
-        
-    except Exception as e:
-        logger.error(f"Dietary restaurant search error: {e}")
-        return {
-            "response_text": f"I can help you find {dietary_type} restaurants! Let me search for options in your area.",
-            "was_successful": False
-        }
+
 
 async def generate_corby_response(intent: str, entities: Dict[str, Any], command_text: str, session: CorbySession):
     """Generate Corby's response based on intent and entities"""
