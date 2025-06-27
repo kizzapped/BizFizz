@@ -447,6 +447,186 @@ ADVERTISING_PACKAGES = {
     "premium": {"price": 299.0, "duration_days": 30, "features": ["Premium placement", "Unlimited impressions", "Advanced targeting", "Dedicated support"]}
 }
 
+# Geolocation and Proximity Functions
+import math
+
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance between two coordinates using Haversine formula (returns meters)"""
+    R = 6371000  # Earth's radius in meters
+    
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    a = (math.sin(delta_lat / 2) * math.sin(delta_lat / 2) +
+         math.cos(lat1_rad) * math.cos(lat2_rad) *
+         math.sin(delta_lon / 2) * math.sin(delta_lon / 2))
+    
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    distance = R * c
+    
+    return distance
+
+async def check_proximity_triggers(user_id: str, latitude: float, longitude: float):
+    """Check if user location triggers any promotional campaigns"""
+    try:
+        triggered_campaigns = []
+        
+        # Get user's location permissions
+        user_permission = await db.location_permissions.find_one({"user_id": user_id})
+        if not user_permission or not user_permission.get("location_sharing", False):
+            return triggered_campaigns
+        
+        # Get all active promotional campaigns
+        active_campaigns = []
+        async for campaign in db.promotional_campaigns.find({
+            "is_active": True,
+            "valid_until": {"$gt": datetime.utcnow()}
+        }):
+            active_campaigns.append(campaign)
+        
+        for campaign in active_campaigns:
+            # Get business location
+            business = await db.businesses.find_one({"id": campaign["business_id"]})
+            if not business:
+                continue
+                
+            # Calculate distance
+            business_lat = business.get("latitude")
+            business_lon = business.get("longitude")
+            
+            if business_lat and business_lon:
+                distance = calculate_distance(latitude, longitude, business_lat, business_lon)
+                
+                # Check if within campaign radius
+                if distance <= campaign.get("target_radius", 1609.34):
+                    # Check if user hasn't received this promo recently (prevent spam)
+                    recent_alert = await db.proximity_alerts.find_one({
+                        "user_id": user_id,
+                        "campaign_id": campaign["id"],
+                        "sent_at": {"$gte": datetime.utcnow() - timedelta(hours=6)}
+                    })
+                    
+                    if not recent_alert and campaign.get("current_uses", 0) < campaign.get("max_uses", 100):
+                        triggered_campaigns.append({
+                            "campaign": campaign,
+                            "business": business,
+                            "distance": distance
+                        })
+        
+        return triggered_campaigns
+        
+    except Exception as e:
+        logger.error(f"Proximity check error: {e}")
+        return []
+
+async def send_proximity_notification(user_id: str, campaign: dict, business: dict, distance: float):
+    """Send promotional notification to user"""
+    try:
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            return False
+        
+        # Create proximity alert record
+        proximity_alert = ProximityAlert(
+            user_id=user_id,
+            business_id=campaign["business_id"],
+            campaign_id=campaign["id"],
+            distance_meters=distance,
+            promo_message=campaign["promo_message"],
+            method="sms" if campaign.get("send_sms", True) else "push"
+        )
+        
+        await db.proximity_alerts.insert_one(proximity_alert.dict())
+        
+        # Prepare promotional message
+        distance_text = f"{distance/1609.34:.1f} miles" if distance > 1000 else f"{int(distance)} meters"
+        
+        promo_message = f"""
+🍽️ Hey {user.get('name', 'Food Lover')}! 
+
+You're just {distance_text} from {business['name']}!
+
+🎉 SPECIAL OFFER: {campaign['promo_message']}
+        
+Use code: {campaign.get('promo_code', 'NEARBY')}
+Valid until: {campaign['valid_until'].strftime('%m/%d %I:%M %p')}
+
+📍 {business.get('address', '')}
+🕒 Open now! Tap to get directions
+        """.strip()
+        
+        # Send SMS notification (if Twilio is configured)
+        sms_sent = False
+        if TWILIO_ACCOUNT_SID and campaign.get("send_sms", True) and user.get("phone"):
+            try:
+                from twilio.rest import Client
+                twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+                
+                message = twilio_client.messages.create(
+                    body=promo_message,
+                    from_='+1234567890',  # Your Twilio number
+                    to=user["phone"]
+                )
+                
+                sms_sent = True
+                logger.info(f"SMS sent to {user['phone']}: {message.sid}")
+                
+            except Exception as e:
+                logger.error(f"SMS sending failed: {e}")
+        
+        # Send push notification (WebSocket)
+        if campaign.get("send_push", True):
+            try:
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "proximity_promo",
+                        "title": f"Special Offer at {business['name']}!",
+                        "message": campaign["promo_message"],
+                        "business": business,
+                        "campaign": campaign,
+                        "distance": distance_text,
+                        "alert_id": proximity_alert.id
+                    }),
+                    user_id
+                )
+            except Exception as e:
+                logger.error(f"Push notification failed: {e}")
+        
+        # Update campaign usage
+        await db.promotional_campaigns.update_one(
+            {"id": campaign["id"]},
+            {
+                "$inc": {"current_uses": 1},
+                "$set": {
+                    f"success_metrics.notifications_sent": campaign.get("success_metrics", {}).get("notifications_sent", 0) + 1
+                }
+            }
+        )
+        
+        # Notify business owner
+        await manager.send_personal_message(
+            json.dumps({
+                "type": "customer_nearby",
+                "title": "Potential Customer Nearby!",
+                "message": f"Customer {user.get('name', 'Anonymous')} is {distance_text} away and received your promo!",
+                "user_info": {
+                    "name": user.get("name", "Anonymous"),
+                    "distance": distance_text,
+                    "promo_sent": True
+                },
+                "campaign": campaign["campaign_name"]
+            }),
+            campaign["business_id"]
+        )
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Proximity notification error: {e}")
+        return False
+
 # Social Media Monitoring Functions
 def analyze_sentiment(text: str) -> Dict[str, float]:
     """Enhanced sentiment analysis using OpenAI and TextBlob"""
