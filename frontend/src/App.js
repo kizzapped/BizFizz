@@ -50,17 +50,26 @@ function App() {
   const [nearbyUsers, setNearbyUsers] = useState([]);
   const [proximityAlerts, setProximityAlerts] = useState([]);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
-  const [newCampaign, setNewCampaign] = useState({
-    campaign_name: '',
-    promo_message: '',
-    discount_amount: '',
-    discount_type: 'percentage',
-    promo_code: '',
-    valid_until: '',
-    max_uses: 100,
-    target_radius: 1,
-    send_sms: true,
-    send_push: true
+  // OpenTable reservation states
+  const [restaurantSearchResults, setRestaurantSearchResults] = useState([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [reservationForm, setReservationForm] = useState({
+    guest_name: '',
+    guest_email: '',
+    guest_phone: '',
+    reservation_date: '',
+    reservation_time: '19:00',
+    party_size: 2,
+    special_requests: ''
+  });
+  const [userReservations, setUserReservations] = useState([]);
+  const [searchQuery, setSearchQuery] = useState({
+    query: '',
+    date: '',
+    time: '19:00',
+    party_size: 2,
+    location: '',
+    cuisine: ''
   });
   const [userRegistration, setUserRegistration] = useState({
     email: '',
