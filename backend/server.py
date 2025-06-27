@@ -112,12 +112,13 @@ if OPENAI_API_KEY:
 
 # Initialize Stripe client
 stripe_checkout = None
-if STRIPE_SECRET_KEY and STRIPE_SECRET_KEY != 'sk_test_placeholder':
-    try:
-        stripe_checkout = StripeCheckout(api_key=STRIPE_SECRET_KEY)
-    except Exception as e:
-        logger.error(f"Failed to initialize Stripe client: {str(e)}")
-        stripe_checkout = None
+# Temporarily disable Stripe integration
+# if STRIPE_SECRET_KEY and STRIPE_SECRET_KEY != 'sk_test_placeholder':
+#     try:
+#         stripe_checkout = StripeCheckout(api_key=STRIPE_SECRET_KEY)
+#     except Exception as e:
+#         logger.error(f"Failed to initialize Stripe client: {str(e)}")
+#         stripe_checkout = None
 
 # Initialize Twitter client
 twitter_client = None
