@@ -1349,7 +1349,7 @@ async def handle_review_requests(command_text: str, session: CorbySession):
         
         # Extract restaurant name and review type
         review_patterns = {
-            "leave_review": r"leave\s+(.*?)\s+(?:a\s+)?(good|great|positive|5.star|excellent|bad|negative|poor)\s+review\s+(?:for|at)\s+(.*)",
+            "leave_review": r"leave\s+(.*?)\s+(?:a\s+)?(good|great|positive|5.star|excellent|bad|negative|poor)\s+review\s+(?:for|at|about)\s+me",
             "write_review": r"write\s+(?:a\s+)?(good|great|positive|5.star|excellent|bad|negative|poor)\s+review\s+(?:for|about)\s+(.*)"
         }
         
