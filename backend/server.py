@@ -938,6 +938,46 @@ async def process_voice_command(user_id: str, command_text: str, session_id: Opt
             if not session:
                 return {"error": "Session not found"}
 
+        # Always check for advanced menu queries first (before intent analysis)
+        advanced_response = await handle_advanced_menu_queries(command_text, session)
+        if advanced_response:
+            # Update conversation and return advanced response
+            session.conversation_history.append({
+                "user": command_text,
+                "corby": advanced_response["response_text"],
+                "timestamp": datetime.utcnow().isoformat(),
+                "intent": "advanced_menu_query"
+            })
+            await db.corby_sessions.replace_one({"id": session_id}, session.dict())
+            return {
+                "session_id": session_id,
+                "response_text": advanced_response["response_text"],
+                "intent": "advanced_menu_query",
+                "voice_enabled": True,
+                "voice_profile": voice_profile,
+                **advanced_response
+            }
+
+        # Check for review requests
+        review_response = await handle_review_requests(command_text, session)
+        if review_response:
+            # Update conversation and return review response
+            session.conversation_history.append({
+                "user": command_text,
+                "corby": review_response["response_text"],
+                "timestamp": datetime.utcnow().isoformat(),
+                "intent": "review_request"
+            })
+            await db.corby_sessions.replace_one({"id": session_id}, session.dict())
+            return {
+                "session_id": session_id,
+                "response_text": review_response["response_text"],
+                "intent": "review_request",
+                "voice_enabled": True,
+                "voice_profile": voice_profile,
+                **review_response
+            }
+
         # Check for complex queries first
         complex_response = await handle_complex_queries(command_text, session)
         if complex_response:
