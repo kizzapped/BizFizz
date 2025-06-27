@@ -2443,6 +2443,8 @@ function App() {
         return <RegisterPage />;
       case 'marketplace':
         return <MarketplacePage />;
+      case 'reservations':
+        return <OpenTableReservationsPage />;
       case 'pricing':
         return <PricingPage />;
       case 'messages':
