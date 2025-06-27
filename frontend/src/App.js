@@ -2882,6 +2882,74 @@ function App() {
   return (
     <div className="App">
       {renderCurrentPage()}
+
+      {/* Floating Corby Assistant Button */}
+      {voiceSupported && currentPage !== 'corby' && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setShowCorbyInterface(!showCorbyInterface)}
+            className={`w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-300 ${
+              isListening ? 'bg-red-500 animate-pulse' :
+              isSpeaking ? 'bg-green-500 animate-bounce' :
+              'bg-blue-500 hover:bg-blue-600 hover:scale-110'
+            } text-white`}
+            title="Talk to Corby"
+          >
+            🤖
+          </button>
+          
+          {showCorbyInterface && (
+            <div className="absolute bottom-20 right-0 w-80 bg-white rounded-lg shadow-xl border p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-semibold text-gray-900">🎙️ Quick Chat with Corby</h4>
+                <button
+                  onClick={() => setShowCorbyInterface(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="text-center mb-4">
+                <button
+                  onClick={startListening}
+                  disabled={isListening || !voiceSupported}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    isListening ? 'bg-red-500 text-white cursor-not-allowed animate-pulse' :
+                    'bg-blue-500 hover:bg-blue-600 text-white hover:scale-110'
+                  }`}
+                >
+                  🎙️
+                </button>
+                <p className="text-xs text-gray-600 mt-2">
+                  {isListening ? 'Listening...' : 'Tap to speak'}
+                </p>
+              </div>
+              
+              {corbyResponse && (
+                <div className="bg-gray-50 rounded p-3 mb-3">
+                  <p className="text-sm text-gray-800">{corbyResponse}</p>
+                  <button
+                    onClick={() => speakResponse(corbyResponse)}
+                    className="text-xs text-blue-600 mt-1 hover:text-blue-800"
+                  >
+                    🔊 Replay
+                  </button>
+                </div>
+              )}
+              
+              <div className="text-center">
+                <button
+                  onClick={() => setCurrentPage('corby')}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Open Full Assistant →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
