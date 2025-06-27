@@ -135,6 +135,9 @@ function App() {
             }
           }
         }, 3000);
+        
+        // Fetch user reservations for consumers
+        fetchUserReservations();
       } else if (currentUser.user_type === 'business') {
         fetchPromotionalCampaigns();
         fetchNearbyUsers();
