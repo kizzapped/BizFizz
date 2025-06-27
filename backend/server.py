@@ -1476,16 +1476,27 @@ async def find_dietary_restaurants(dietary_type: str, session: CorbySession):
 async def generate_corby_response(intent: str, entities: Dict[str, Any], command_text: str, session: CorbySession):
     """Generate Corby's response based on intent and entities"""
     try:
+        # First check for advanced menu queries
+        advanced_response = await handle_advanced_menu_queries(command_text, session)
+        if advanced_response:
+            return advanced_response
+        
+        # Check for review requests
+        review_response = await handle_review_requests(command_text, session)
+        if review_response:
+            return review_response
+        
+        # Handle standard intents
         if intent == "greeting":
             return {
-                "response_text": "Hello! I'm Corby, your personal restaurant assistant! I can help you find amazing restaurants, check availability, and even make reservations for you. What can I help you with today?",
+                "response_text": "Hello! I'm Corby, your personal restaurant assistant! I can help you find restaurants by specific dishes, compare prices, check availability, write reviews, and even make reservations for you. What can I help you with today?",
                 "action_taken": None,
                 "was_successful": True
             }
         
         elif intent == "help":
             return {
-                "response_text": "I'm here to help! You can ask me things like: 'Find Italian restaurants near me', 'Book a table for 2 at 7 PM tonight', 'What are the best sushi places nearby?', or 'Check availability at Joe's Bistro for tomorrow'. Just speak naturally and I'll take care of the rest!",
+                "response_text": "I'm here to help with all your dining needs! You can ask me things like: 'Find restaurants with steak and seafood', 'What's the best price for appetizers?', 'Book a table for 2 at 7 PM', 'Leave a good review for Joe's Bistro', or 'Find vegetarian restaurants nearby'. Just speak naturally and I'll take care of the rest!",
                 "action_taken": None,
                 "was_successful": True
             }
@@ -1503,12 +1514,12 @@ async def generate_corby_response(intent: str, entities: Dict[str, Any], command
             return await handle_recommendations(entities, session)
         
         else:
-            # Use OpenAI for general conversation
+            # Use enhanced AI for general conversation
             if openai_client:
-                return await generate_ai_conversation_response(command_text, session)
+                return await generate_enhanced_ai_response(command_text, session)
             else:
                 return {
-                    "response_text": "I'm focused on helping you with restaurants! Try asking me to find restaurants, check availability, or make reservations.",
+                    "response_text": "I'm your restaurant expert! Try asking me to find specific dishes, compare prices, check availability, or help with reviews.",
                     "action_taken": None,
                     "was_successful": False
                 }
@@ -1519,6 +1530,57 @@ async def generate_corby_response(intent: str, entities: Dict[str, Any], command
             "response_text": "I'm having trouble processing that request. Could you try asking in a different way?",
             "action_taken": None,
             "was_successful": False
+        }
+
+async def generate_enhanced_ai_response(command_text: str, session: CorbySession):
+    """Generate enhanced conversational response using OpenAI"""
+    try:
+        context = "\n".join([f"User: {h['user']}\nCorby: {h['corby']}" for h in session.conversation_history[-3:]])
+        
+        enhanced_conversation_prompt = f"""
+You are Corby, an advanced AI restaurant assistant for BizFizz. You can help with:
+
+CAPABILITIES:
+- Find restaurants by specific menu items ("restaurants with steak and seafood")
+- Compare prices across restaurants ("best price for appetizers")
+- Handle dietary restrictions ("vegetarian restaurants near me")
+- Write restaurant reviews ("leave ABC restaurant a good review")
+- Make reservations and check availability
+- Provide personalized recommendations
+- Answer any restaurant or food-related questions
+
+CONVERSATION CONTEXT:
+{context}
+
+USER'S LATEST MESSAGE: "{command_text}"
+
+Respond enthusiastically and helpfully. If they're asking about something you can do, explain how you can help. If it's restaurant-related, be specific about your capabilities. Keep it conversational and under 2 sentences.
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are Corby, an advanced restaurant AI assistant with comprehensive dining capabilities. Be helpful, enthusiastic, and specific about what you can do."},
+                {"role": "user", "content": enhanced_conversation_prompt}
+            ],
+            max_tokens=150,
+            temperature=0.7
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        return {
+            "response_text": response_text,
+            "action_taken": "enhanced_ai_conversation",
+            "was_successful": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Enhanced AI conversation error: {e}")
+        return {
+            "response_text": "I'm here to help you with restaurants! I can find specific dishes, compare prices, make reservations, and even help write reviews. What would you like to explore?",
+            "action_taken": None,
+            "was_successful": True
         }
 
 async def handle_restaurant_search(entities: Dict[str, Any], session: CorbySession):
