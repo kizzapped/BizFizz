@@ -1528,6 +1528,8 @@ function App() {
         return <MessagesPage />;
       case 'social-monitoring':
         return <SocialMonitoringPage />;
+      case 'advanced-analytics':
+        return <AdvancedAnalyticsDashboard />;
       case 'competitors':
         return <div className="p-8 text-center">Competitors page (existing implementation)</div>;
       case 'ultimate-report':
