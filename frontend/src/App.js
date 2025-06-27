@@ -644,8 +644,50 @@ function App() {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       setVoiceSupported(true);
       initializeVoiceSettings();
+      fetchVoiceProfiles();
     }
   }, []);
+
+  const fetchVoiceProfiles = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/corby/voice-profiles`);
+      const data = await response.json();
+      setAvailableVoiceProfiles(data.profiles || {});
+    } catch (error) {
+      console.error('Error fetching voice profiles:', error);
+    }
+  };
+
+  const fetchCorbyAnalytics = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/corby/analytics/${currentUser.id}?days=30`);
+        const data = await response.json();
+        setCorbyAnalytics(data);
+      }
+    } catch (error) {
+      console.error('Error fetching Corby analytics:', error);
+    }
+  };
+
+  const fetchSmartRecommendations = async () => {
+    try {
+      if (currentUser && currentUser.id) {
+        const response = await fetch(`${API_BASE_URL}/api/corby/smart-recommendations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            session_id: corbySessionId
+          })
+        });
+        const data = await response.json();
+        setSmartRecommendations(data.recommendations || []);
+      }
+    } catch (error) {
+      console.error('Error fetching smart recommendations:', error);
+    }
+  };
 
   const initializeVoiceSettings = () => {
     if ('speechSynthesis' in window) {
@@ -665,6 +707,45 @@ function App() {
     }
   };
 
+  const setVoiceProfilePreference = async (profile) => {
+    try {
+      setVoiceProfile(profile);
+      
+      if (currentUser && corbySessionId) {
+        await fetch(`${API_BASE_URL}/api/corby/voice-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            voice_profile: profile,
+            session_id: corbySessionId
+          })
+        });
+      }
+      
+      // Update voice settings based on profile
+      const profileSettings = {
+        professional: { rate: 0.9, pitch: 1.0, volume: 0.8 },
+        friendly: { rate: 1.0, pitch: 1.1, volume: 0.9 },
+        luxury: { rate: 0.8, pitch: 0.9, volume: 0.85 }
+      }[profile] || { rate: 0.9, pitch: 1.0, volume: 0.8 };
+      
+      setVoiceSettings(prev => ({ ...prev, ...profileSettings }));
+      
+      // Give feedback
+      const profileMessages = {
+        professional: "Voice profile set to Professional - clear and business-like.",
+        friendly: "Voice profile set to Friendly - warm and conversational!",
+        luxury: "Voice profile set to Luxury - sophisticated and refined."
+      };
+      
+      speakResponse(profileMessages[profile] || "Voice profile updated!");
+      
+    } catch (error) {
+      console.error('Error setting voice profile:', error);
+    }
+  };
+
   const startListening = () => {
     if (!voiceSupported) {
       alert('Voice recognition is not supported in your browser');
@@ -677,6 +758,8 @@ function App() {
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
+    
+    setVoiceRecognition(recognition);
     
     recognition.onstart = () => {
       setIsListening(true);
@@ -694,7 +777,7 @@ function App() {
         timestamp: new Date().toLocaleTimeString()
       }]);
       
-      // Process with Corby
+      // Process with enhanced Corby
       await processVoiceCommand(transcript);
     };
     
@@ -704,27 +787,41 @@ function App() {
       
       if (event.error === 'not-allowed') {
         alert('Microphone access denied. Please enable microphone permissions for voice features.');
+      } else if (event.error === 'network') {
+        speakResponse("I'm having trouble with my connection. Let me try again.");
       } else {
-        speakResponse("I didn't catch that. Could you try again?");
+        speakResponse("I didn't catch that clearly. Could you try again?");
       }
     };
     
     recognition.onend = () => {
       setIsListening(false);
+      setVoiceRecognition(null);
     };
     
     recognition.start();
   };
 
+  const stopListening = () => {
+    if (voiceRecognition) {
+      voiceRecognition.stop();
+      setIsListening(false);
+      setVoiceRecognition(null);
+    }
+  };
+
   const processVoiceCommand = async (commandText) => {
     try {
+      setIsProcessingVoice(true);
+      
       const response = await fetch(`${API_BASE_URL}/api/corby/voice-command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: currentUser?.id || 'anonymous',
           command_text: commandText,
-          session_id: corbySessionId
+          session_id: corbySessionId,
+          voice_profile: voiceProfile
         })
       });
 
@@ -740,14 +837,22 @@ function App() {
         message: result.response_text,
         timestamp: new Date().toLocaleTimeString(),
         intent: result.intent,
-        action: result.action_taken
+        action: result.action_taken,
+        confidence: result.confidence,
+        ai_method: result.ai_method,
+        voice_profile: result.voice_profile
       }]);
       
       setCorbyResponse(result.response_text);
       
-      // Speak the response
+      // Speak the response with enhanced voice
       if (result.voice_enabled) {
-        speakResponse(result.response_text);
+        if (result.voice_data && result.voice_data.use_premium_voice) {
+          // Premium voice would be handled here
+          speakResponse(result.response_text);
+        } else {
+          speakResponse(result.response_text);
+        }
       }
       
       // Handle data responses (like restaurant search results)
@@ -756,9 +861,14 @@ function App() {
         setCurrentPage('reservations');
       }
       
+      // Refresh smart recommendations if available
+      if (result.intent === 'restaurant_search' || result.intent === 'get_recommendations') {
+        setTimeout(fetchSmartRecommendations, 1000);
+      }
+      
     } catch (error) {
       console.error('Error processing voice command:', error);
-      const errorResponse = "I'm having trouble right now. Please try again.";
+      const errorResponse = "I'm experiencing some technical difficulties, but I'm still here to help! Could you try asking again?";
       setConversationHistory(prev => [...prev, {
         type: 'corby',
         message: errorResponse,
@@ -766,6 +876,8 @@ function App() {
         intent: 'error'
       }]);
       speakResponse(errorResponse);
+    } finally {
+      setIsProcessingVoice(false);
     }
   };
 
