@@ -2017,6 +2017,8 @@ function App() {
         return <MessagesPage />;
       case 'social-monitoring':
         return <SocialMonitoringPage />;
+      case 'proximity-marketing':
+        return <ProximityMarketingPage />;
       case 'advanced-analytics':
         return <AdvancedAnalyticsDashboard />;
       case 'competitors':
