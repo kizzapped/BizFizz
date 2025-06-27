@@ -1090,6 +1090,11 @@ async def run_social_monitoring(rule: SocialMonitoringRule):
                 facebook_mentions = await monitor_facebook(rule.keywords, rule.business_id, rule.business_name)
                 all_mentions.extend(facebook_mentions)
             
+            # Monitor Google Places/Reviews
+            if "google" in rule.platforms:
+                google_mentions = await monitor_google_reviews(rule.keywords, rule.business_id, rule.business_name)
+                all_mentions.extend(google_mentions)
+            
             # Monitor News
             if "news" in rule.platforms:
                 news_articles = await monitor_news(rule.keywords, rule.business_id, rule.business_name)
