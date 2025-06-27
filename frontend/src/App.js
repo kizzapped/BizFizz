@@ -79,9 +79,13 @@ function App() {
         // Real-time dashboard updates every 30 seconds
         const interval = setInterval(() => {
           fetchRealTimeDashboard();
+          fetchMobileNotifications();
         }, 30000);
         
-        return () => clearInterval(interval);
+        return () => {
+          clearInterval(interval);
+          window.removeEventListener('resize', checkMobile);
+        };
       }
     }
     
