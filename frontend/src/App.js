@@ -498,6 +498,13 @@ function App() {
                         </span>
                       )}
                     </button>
+                    <button 
+                      onClick={() => setCurrentPage('advanced-analytics')}
+                      className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center"
+                    >
+                      <FaChartLine className="mr-1" />
+                      Analytics
+                    </button>
                   </>
                 )}
                 {userType === 'consumer' && (
