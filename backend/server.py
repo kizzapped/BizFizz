@@ -1175,6 +1175,137 @@ async def export_analytics_report(business_id: str, format: str = "pdf", days: i
         logger.error(f"Export report error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to export report")
 
+@app.get("/api/mobile/dashboard/{business_id}")
+async def get_mobile_dashboard(business_id: str):
+    """Optimized mobile dashboard endpoint"""
+    try:
+        # Get essential data for mobile
+        yesterday = datetime.utcnow() - timedelta(hours=24)
+        
+        # Critical alerts only
+        critical_alerts = []
+        async for alert in db.social_alerts.find({
+            "business_id": business_id,
+            "priority": {"$in": ["high", "critical"]},
+            "is_read": False
+        }).sort("created_at", -1).limit(5):
+            if "_id" in alert:
+                del alert["_id"]
+            critical_alerts.append(alert)
+        
+        # Recent sentiment summary
+        sentiment_summary = await db.social_mentions.aggregate([
+            {"$match": {
+                "business_id": business_id,
+                "detected_at": {"$gte": yesterday}
+            }},
+            {"$group": {
+                "_id": "$sentiment_label",
+                "count": {"$sum": 1}
+            }}
+        ]).to_list(None)
+        
+        # Platform activity (simplified for mobile)
+        platform_activity = await db.social_mentions.aggregate([
+            {"$match": {
+                "business_id": business_id,
+                "detected_at": {"$gte": yesterday}
+            }},
+            {"$group": {
+                "_id": "$platform",
+                "count": {"$sum": 1},
+                "latest": {"$max": "$detected_at"}
+            }}
+        ]).to_list(None)
+        
+        return {
+            "critical_alerts": critical_alerts,
+            "sentiment_summary": sentiment_summary,
+            "platform_activity": platform_activity,
+            "total_alerts": len(critical_alerts),
+            "monitoring_active": True,
+            "last_updated": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Mobile dashboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get mobile dashboard")
+
+@app.post("/api/mobile/quick-response/{mention_id}")
+async def mobile_quick_response(mention_id: str, response_type: str):
+    """Quick response actions for mobile"""
+    try:
+        mention = await db.social_mentions.find_one({"id": mention_id})
+        if not mention:
+            raise HTTPException(status_code=404, detail="Mention not found")
+        
+        # Generate quick response based on type
+        quick_responses = {
+            "thank": "Thank you so much for your wonderful review! We're thrilled you enjoyed your experience with us. 🙏",
+            "apologize": "We sincerely apologize for the experience you had. Please reach out to us directly so we can make this right. 📞",
+            "investigate": "Thank you for bringing this to our attention. We're looking into this matter and will follow up with you shortly. 🔍",
+            "invite": "We'd love to have you visit us again! Please let us know if there's anything we can do to improve your experience. 🍽️"
+        }
+        
+        suggested_response = quick_responses.get(response_type, "Thank you for your feedback!")
+        
+        # Create response record
+        response_record = {
+            "id": str(uuid.uuid4()),
+            "mention_id": mention_id,
+            "response_type": response_type,
+            "suggested_response": suggested_response,
+            "platform": mention["platform"],
+            "created_at": datetime.utcnow(),
+            "business_id": mention["business_id"]
+        }
+        
+        await db.quick_responses.insert_one(response_record)
+        
+        return {
+            "suggested_response": suggested_response,
+            "platform": mention["platform"],
+            "mention_url": mention.get("url"),
+            "response_id": response_record["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Quick response error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate quick response")
+
+@app.get("/api/mobile/notifications/{business_id}")
+async def get_mobile_notifications(business_id: str, limit: int = 10):
+    """Get mobile-optimized notifications"""
+    try:
+        notifications = []
+        
+        # Get recent high-priority alerts
+        async for alert in db.social_alerts.find({
+            "business_id": business_id,
+            "priority": {"$in": ["medium", "high", "critical"]}
+        }).sort("created_at", -1).limit(limit):
+            if "_id" in alert:
+                del alert["_id"]
+            
+            # Simplify for mobile
+            notification = {
+                "id": alert["id"],
+                "title": alert["title"],
+                "message": alert["description"][:100] + "..." if len(alert["description"]) > 100 else alert["description"],
+                "priority": alert["priority"],
+                "timestamp": alert["created_at"],
+                "is_read": alert["is_read"],
+                "type": alert["alert_type"]
+            }
+            
+            notifications.append(notification)
+        
+        return {"notifications": notifications}
+        
+    except Exception as e:
+        logger.error(f"Mobile notifications error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get notifications")
+
 # Social Media Monitoring API Endpoints
 
 @app.post("/api/social/monitoring/start")
