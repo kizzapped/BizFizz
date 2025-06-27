@@ -71,6 +71,21 @@ function App() {
     location: '',
     cuisine: ''
   });
+  
+  // Corby Voice Assistant states
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [corbySessionId, setCorbySessionId] = useState(null);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [corbyResponse, setCorbyResponse] = useState('');
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [voiceSettings, setVoiceSettings] = useState({
+    rate: 0.9,
+    pitch: 1.0,
+    volume: 0.8,
+    voice: null
+  });
+  const [showCorbyInterface, setShowCorbyInterface] = useState(false);
   const [newCampaign, setNewCampaign] = useState({
     campaign_name: '',
     promo_message: '',
