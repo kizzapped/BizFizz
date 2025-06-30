@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BizFizz - Feature Gallery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .gallery-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        }
+
+        .gallery-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .gallery-title {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .gallery-subtitle {
+            font-size: 1.3rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .section {
+            margin-bottom: 4rem;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 3rem;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 2.2rem;
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .section-description {
+            font-size: 1.1rem;
+            color: #666;
+            text-align: center;
+            margin-bottom: 2rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .mockup {
+            background: #f8f9fa;
+            border: 3px solid #dee2e6;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mockup::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .mockup::after {
+            content: '● ● ●';
+            position: absolute;
+            top: 12px;
+            left: 15px;
+            color: #fff;
+            font-size: 12px;
+            letter-spacing: 3px;
+        }
+
+        .mockup-content {
+            margin-top: 30px;
+            min-height: 300px;
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            border: 1px solid #dee2e6;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .feature-item {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid #3498db;
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.8rem;
+            color: #2c3e50;
+        }
+
+        .feature-desc {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .mockup-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 1rem 2rem;
+            margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mockup-logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .mockup-nav {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-item {
+            background: #3498db;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .dashboard-mockup {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 1.5rem;
+            min-height: 400px;
+        }
+
+        .sidebar-mockup {
+            background: #2c3e50;
+            color: white;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .sidebar-item {
+            background: #3498db;
+            color: white;
+            padding: 0.8rem;
+            border-radius: 6px;
+            margin-bottom: 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .dashboard-content {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .chart-area {
+            background: white;
+            height: 150px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            border: 2px dashed #ddd;
+        }
+
+        .restaurant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .restaurant-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+        }
+
+        .restaurant-image {
+            height: 120px;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .restaurant-info {
+            padding: 1rem;
+        }
+
+        .restaurant-name {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .restaurant-rating {
+            color: #f39c12;
+            margin-bottom: 0.5rem;
+        }
+
+        .chat-mockup {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-height: 300px;
+            border: 2px solid #9b59b6;
+        }
+
+        .chat-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .corby-avatar {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .chat-message {
+            background: #3498db;
+            color: white;
+            padding: 0.8rem 1.2rem;
+            border-radius: 18px;
+            margin-bottom: 1rem;
+            max-width: 80%;
+        }
+
+        .chat-message.user {
+            background: #e74c3c;
+            margin-left: auto;
+        }
+
+        .voice-input-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .voice-btn {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 1.2rem;
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 0.8rem;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+        }
+
+        .url-box {
+            background: #e8f6f3;
+            border: 2px solid #1abc9c;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .url-text {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="gallery-container">
+        <div class="gallery-header">
+            <h1 class="gallery-title">🚀 BizFizz</h1>
+            <p class="gallery-subtitle">Complete Feature Gallery - Restaurant Intelligence Platform</p>
+            
+            <div class="url-box">
+                <h3 style="margin-bottom: 1rem; color: #2c3e50;">🌐 Your Live BizFizz App</h3>
+                <div class="url-text">https://f90535ab-40ad-4ea0-8d70-ae7933f4891b.preview.emergentagent.com</div>
+                <p style="margin-top: 0.8rem; color: #666;">Click the link above to access your live BizFizz application!</p>
+            </div>
+        </div>
+
+        <!-- Landing Page Section -->
+        <div class="section">
+            <h2 class="section-title">🏠 Landing Page</h2>
+            <p class="section-description">Professional homepage showcasing BizFizz value proposition and dual user paths</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div class="mockup-header">
+                        <div class="mockup-logo">🚀 BizFizz</div>
+                        <div class="mockup-nav">
+                            <div class="nav-item">Home</div>
+                            <div class="nav-item">Consumer App</div>
+                            <div class="nav-item">Restaurant Dashboard</div>
+                            <div class="nav-item">Corby AI</div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; padding: 2rem;">
+                        <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">🚀 BizFizz</h1>
+                        <p style="font-size: 1.2rem; color: #666; margin-bottom: 2rem;">The Ultimate Restaurant Intelligence & Marketplace Platform</p>
+                        
+                        <div style="display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 2rem;">
+                            <button style="background: #3498db; color: white; padding: 1rem 2rem; border: none; border-radius: 25px; font-size: 1rem;">
+                                🍽️ Discover Restaurants
+                            </button>
+                            <button style="background: #e74c3c; color: white; padding: 1rem 2rem; border: none; border-radius: 25px; font-size: 1rem;">
+                                📊 Restaurant Dashboard
+                            </button>
+                        </div>
+                        
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <div class="feature-icon">🤖</div>
+                                <div class="feature-title">Corby AI Assistant</div>
+                                <div class="feature-desc">Voice-powered restaurant discovery</div>
+                            </div>
+                            <div class="feature-item">
+                                <div class="feature-icon">📍</div>
+                                <div class="feature-title">Proximity Marketing</div>
+                                <div class="feature-desc">Location-based customer engagement</div>
+                            </div>
+                            <div class="feature-item">
+                                <div class="feature-icon">📊</div>
+                                <div class="feature-title">Real-time Analytics</div>
+                                <div class="feature-desc">Business intelligence dashboard</div>
+                            </div>
+                            <div class="feature-item">
+                                <div class="feature-icon">🔍</div>
+                                <div class="feature-title">Social Monitoring</div>
+                                <div class="feature-desc">Track mentions across platforms</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Consumer App Section -->
+        <div class="section">
+            <h2 class="section-title">👥 Consumer Discovery App</h2>
+            <p class="section-description">Intelligent restaurant discovery with voice search, ratings, and instant booking</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div style="background: white; border-radius: 25px; padding: 1rem 2rem; box-shadow: 0 3px 15px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem;">
+                        <span>🔍</span>
+                        <input type="text" placeholder="Search restaurants, cuisine, or say 'Hey Corby'..." style="flex: 1; border: none; font-size: 1rem; outline: none;">
+                        <button style="background: #3498db; color: white; border: none; padding: 0.6rem 1rem; border-radius: 20px;">Search</button>
+                        <button style="background: #e74c3c; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">🎤</button>
+                    </div>
+                    
+                    <div class="restaurant-grid">
+                        <div class="restaurant-card">
+                            <div class="restaurant-image">📸 The Gourmet Spot</div>
+                            <div class="restaurant-info">
+                                <div class="restaurant-name">The Gourmet Spot</div>
+                                <div class="restaurant-rating">⭐⭐⭐⭐⭐ 4.8 (324 reviews)</div>
+                                <div style="color: #27ae60; font-weight: bold;">$$ • Italian • 0.3 miles</div>
+                                <button style="background: #3498db; color: white; border: none; padding: 0.5rem 1rem; border-radius: 20px; margin-top: 0.8rem;">Book Table</button>
+                            </div>
+                        </div>
+                        
+                        <div class="restaurant-card">
+                            <div class="restaurant-image">📸 Sushi Zen</div>
+                            <div class="restaurant-info">
+                                <div class="restaurant-name">Sushi Zen</div>
+                                <div class="restaurant-rating">⭐⭐⭐⭐☆ 4.6 (198 reviews)</div>
+                                <div style="color: #27ae60; font-weight: bold;">$$$ • Japanese • 0.5 miles</div>
+                                <button style="background: #3498db; color: white; border: none; padding: 0.5rem 1rem; border-radius: 20px; margin-top: 0.8rem;">Book Table</button>
+                            </div>
+                        </div>
+                        
+                        <div class="restaurant-card">
+                            <div class="restaurant-image">📸 Burger Paradise</div>
+                            <div class="restaurant-info">
+                                <div class="restaurant-name">Burger Paradise</div>
+                                <div class="restaurant-rating">⭐⭐⭐⭐⭐ 4.9 (456 reviews)</div>
+                                <div style="color: #27ae60; font-weight: bold;">$ • American • 0.8 miles</div>
+                                <button style="background: #3498db; color: white; border: none; padding: 0.5rem 1rem; border-radius: 20px; margin-top: 0.8rem;">Book Table</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Restaurant Dashboard Section -->
+        <div class="section">
+            <h2 class="section-title">📊 Restaurant Owner Dashboard</h2>
+            <p class="section-description">Comprehensive business intelligence with real-time analytics, social monitoring, and proximity marketing</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div class="dashboard-mockup">
+                        <div class="sidebar-mockup">
+                            <h4 style="margin-bottom: 1rem;">Dashboard</h4>
+                            <div class="sidebar-item">📊 Overview</div>
+                            <div class="sidebar-item">📈 Analytics</div>
+                            <div class="sidebar-item">📱 Social Monitoring</div>
+                            <div class="sidebar-item">📍 Proximity Marketing</div>
+                            <div class="sidebar-item">⭐ Reviews</div>
+                            <div class="sidebar-item">📅 Reservations</div>
+                        </div>
+                        
+                        <div class="dashboard-content">
+                            <h3 style="margin-bottom: 1.5rem;">Restaurant Overview</h3>
+                            
+                            <div class="stat-cards">
+                                <div class="stat-card">
+                                    <div class="stat-number">347</div>
+                                    <div style="font-size: 0.8rem;">Today's Reservations</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">$23,450</div>
+                                    <div style="font-size: 0.8rem;">Today's Revenue</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                                    <div class="stat-number">4.8</div>
+                                    <div style="font-size: 0.8rem;">Average Rating</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);">
+                                    <div class="stat-number">89</div>
+                                    <div style="font-size: 0.8rem;">Proximity Conversions</div>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-area">
+                                📊 Interactive Revenue Chart (Last 30 Days)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Social Media Monitoring Section -->
+        <div class="section">
+            <h2 class="section-title">📱 Social Media Monitoring</h2>
+            <p class="section-description">Real-time sentiment analysis and crisis detection across all social platforms</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                        <div>
+                            <h4 style="margin-bottom: 1rem;">Recent Mentions</h4>
+                            
+                            <div style="background: #f8f9fa; border-left: 4px solid #3498db; padding: 1rem; margin-bottom: 1rem; border-radius: 8px;">
+                                <div style="font-weight: bold; color: #3498db; margin-bottom: 0.5rem;">Twitter</div>
+                                <div style="margin-bottom: 0.8rem;">"Just had the most amazing dinner at Joe's Bistro! The service was exceptional and the food was incredible. Highly recommend!" 🌟</div>
+                                <span style="background: #d5f4e6; color: #27ae60; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold;">Positive</span>
+                            </div>
+                            
+                            <div style="background: #f8f9fa; border-left: 4px solid #3498db; padding: 1rem; margin-bottom: 1rem; border-radius: 8px;">
+                                <div style="font-weight: bold; color: #3498db; margin-bottom: 0.5rem;">Google Reviews</div>
+                                <div style="margin-bottom: 0.8rem;">"Great atmosphere and delicious food. Will definitely be back with friends!"</div>
+                                <span style="background: #d5f4e6; color: #27ae60; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold;">Positive</span>
+                            </div>
+                            
+                            <div style="background: #f8f9fa; border-left: 4px solid #3498db; padding: 1rem; border-radius: 8px;">
+                                <div style="font-weight: bold; color: #3498db; margin-bottom: 0.5rem;">Yelp</div>
+                                <div style="margin-bottom: 0.8rem;">"Good food but service was a bit slow tonight. Still enjoyed the experience overall."</div>
+                                <span style="background: #ebf3fd; color: #3498db; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold;">Neutral</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 style="margin-bottom: 1rem;">Today's Stats</h4>
+                            <div class="stat-cards">
+                                <div class="stat-card">
+                                    <div class="stat-number">156</div>
+                                    <div style="font-size: 0.8rem;">Mentions</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">87%</div>
+                                    <div style="font-size: 0.8rem;">Positive</div>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-area">
+                                📈 Sentiment Analysis Trends
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proximity Marketing Section -->
+        <div class="section">
+            <h2 class="section-title">📍 Proximity Marketing</h2>
+            <p class="section-description">Automated geofencing campaigns that target customers when they're nearby</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div class="stat-cards">
+                        <div class="stat-card">
+                            <div class="stat-number">1,234</div>
+                            <div style="font-size: 0.8rem;">People Nearby</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                            <div class="stat-number">89</div>
+                            <div style="font-size: 0.8rem;">Messages Sent</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                            <div class="stat-number">34%</div>
+                            <div style="font-size: 0.8rem;">Conversion Rate</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 3px 15px rgba(0,0,0,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h4>Happy Hour Campaign</h4>
+                            <span style="background: #d5f4e6; color: #27ae60; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold;">Active</span>
+                        </div>
+                        <p><strong>Target:</strong> People within 0.5 miles, 4-7 PM</p>
+                        <p><strong>Message:</strong> "🍹 Happy Hour at Joe's Bistro! 50% off drinks until 7 PM. Just 2 blocks away!"</p>
+                        <p><strong>Performance:</strong> 67 messages sent, 23 conversions today</p>
+                    </div>
+                    
+                    <div style="height: 200px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2rem;">
+                        📍 Interactive Geofencing Map<br>
+                        <small style="font-size: 0.9rem;">Real-time customer locations and campaign radius</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corby AI Assistant Section -->
+        <div class="section">
+            <h2 class="section-title">🤖 Corby AI Voice Assistant</h2>
+            <p class="section-description">Advanced conversational AI for restaurant discovery, reservations, and review generation</p>
+            
+            <div class="mockup">
+                <div class="mockup-content">
+                    <div class="chat-mockup">
+                        <div class="chat-header">
+                            <div class="corby-avatar">🤖</div>
+                            <h3>Corby AI Assistant</h3>
+                            <p style="color: #666;">Your intelligent restaurant companion</p>
+                        </div>
+                        
+                        <div class="chat-message">
+                            Hello! I'm Corby, your AI restaurant assistant. I can help you find restaurants, make reservations, compare prices, and even generate reviews. Try saying "Find me romantic restaurants with steak and seafood dishes"
+                        </div>
+                        
+                        <div class="chat-message user">
+                            Corby, find me romantic restaurants with steak and seafood dishes
+                        </div>
+                        
+                        <div class="chat-message">
+                            Perfect! I found 3 romantic restaurants: The Candlelight Bistro (4.8 stars, $$$), Romance & Wine (4.6 stars, $$), and Intimate Dining (4.9 stars, $$$$). These places have the perfect romantic atmosphere you're looking for. Would you like me to check availability?
+                        </div>
+                        
+                        <div class="voice-input-area">
+                            <button class="voice-btn">🎤</button>
+                            <input type="text" class="text-input" placeholder="Type your message or click the microphone to speak...">
+                            <button style="background: #3498db; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 20px;">Send</button>
+                        </div>
+                        
+                        <div style="margin-top: 1.5rem; text-align: center;">
+                            <div style="display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
+                                <button style="background: transparent; border: 2px solid #3498db; color: #3498db; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.8rem;">Romantic Restaurants</button>
+                                <button style="background: transparent; border: 2px solid #3498db; color: #3498db; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.8rem;">Price Comparison</button>
+                                <button style="background: transparent; border: 2px solid #3498db; color: #3498db; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.8rem;">Generate Review</button>
+                                <button style="background: transparent; border: 2px solid #3498db; color: #3498db; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.8rem;">Make Reservation</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Features Section -->
+        <div class="section">
+            <h2 class="section-title">🎯 Advanced Corby Features</h2>
+            <p class="section-description">Sophisticated AI capabilities that set BizFizz apart from competitors</p>
+            
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Menu-Based Search</div>
+                    <div class="feature-desc">"Find restaurants with steak and seafood dishes" - Advanced query processing</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">💰</div>
+                    <div class="feature-title">Price Comparison</div>
+                    <div class="feature-desc">"What restaurant has the best price for appetizers?" - Smart price analysis</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">⭐</div>
+                    <div class="feature-title">Review Generation</div>
+                    <div class="feature-desc">"Leave Joe's Bistro a good review for me" - AI-generated authentic reviews</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🍽️</div>
+                    <div class="feature-title">Occasion-Based Search</div>
+                    <div class="feature-desc">"Find birthday celebration restaurants" - Context-aware recommendations</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🌅</div>
+                    <div class="feature-title">Meal Time Optimization</div>
+                    <div class="feature-desc">"Find good brunch spots" - Time-specific restaurant discovery</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">💝</div>
+                    <div class="feature-title">Atmosphere Matching</div>
+                    <div class="feature-desc">"Find romantic restaurants for date night" - Ambiance-based filtering</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Highlights Section -->
+        <div class="section">
+            <h2 class="section-title">⚡ Technical Excellence</h2>
+            <p class="section-description">Advanced technology stack powering the BizFizz platform</p>
+            
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">🤖</div>
+                    <div class="feature-title">OpenAI GPT Integration</div>
+                    <div class="feature-desc">Advanced natural language processing for intelligent conversations</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📱</div>
+                    <div class="feature-title">Real-time WebSockets</div>
+                    <div class="feature-desc">Live updates for social monitoring and proximity alerts</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🗺️</div>
+                    <div class="feature-title">Google Maps API</div>
+                    <div class="feature-desc">Accurate location services and restaurant discovery</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">MongoDB + Redis</div>
+                    <div class="feature-desc">High-performance data storage with intelligent caching</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔗</div>
+                    <div class="feature-title">OpenTable Integration</div>
+                    <div class="feature-desc">Seamless reservation booking and management</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-title">Social API Integration</div>
+                    <div class="feature-desc">Twitter, Google Reviews, and News API monitoring</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
