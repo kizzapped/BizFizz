@@ -1944,7 +1944,7 @@ function App() {
                     <ul className="space-y-2">
                       {comprehensiveAnalytics.ai_insights.action_items?.map((action, index) => (
                         <li key={index} className="flex items-start">
-                          <FaTarget className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
+                          <FaBullseye className="text-blue-500 mr-2 mt-1 flex-shrink-0" />
                           <span className="text-sm text-gray-700">{action}</span>
                         </li>
                       ))}
