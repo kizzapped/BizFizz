@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BizFizz - Restaurant Intelligence Platform</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 2rem;
+            margin-left: auto;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: 2px solid #3498db;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: #3498db;
+            transform: translateY(-2px);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* Landing Page */
+        .landing {
+            text-align: center;
+            padding: 4rem 0;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.5rem;
+            color: #666;
+            margin-bottom: 3rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-bottom: 4rem;
+        }
+
+        .cta-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+        }
+
+        .cta-btn.secondary {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+            height: calc(100vh - 120px);
+        }
+
+        .sidebar {
+            background: #2c3e50;
+            border-radius: 15px;
+            padding: 1.5rem;
+            color: white;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 1rem;
+        }
+
+        .sidebar-menu a {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+            cursor: pointer;
+        }
+
+        .sidebar-menu a:hover, .sidebar-menu a.active {
+            background: #3498db;
+        }
+
+        .dashboard-content {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            overflow-y: auto;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* Charts */
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .chart-placeholder {
+            height: 300px;
+            background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        /* Restaurant Discovery */
+        .search-bar {
+            background: white;
+            border-radius: 50px;
+            padding: 1rem 2rem;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            font-size: 1.1rem;
+            outline: none;
+        }
+
+        .search-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+        }
+
+        .restaurant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .restaurant-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .restaurant-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .restaurant-image {
+            height: 200px;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .restaurant-info {
+            padding: 1.5rem;
+        }
+
+        .restaurant-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .restaurant-rating {
+            color: #f39c12;
+            margin-bottom: 0.5rem;
+        }
+
+        .restaurant-price {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        /* Corby AI Interface */
+        .corby-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .corby-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .corby-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #ecf0f1;
+            border-radius: 15px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .chat-message {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.8rem;
+        }
+
+        .chat-message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-bubble {
+            background: #3498db;
+            color: white;
+            padding: 0.8rem 1.2rem;
+            border-radius: 18px;
+            max-width: 70%;
+        }
+
+        .chat-message.user .message-bubble {
+            background: #e74c3c;
+        }
+
+        .voice-input {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .voice-btn {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .voice-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .voice-btn.listening {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Social Media Monitoring */
+        .monitoring-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .mention-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+            border-left: 4px solid #3498db;
+        }
+
+        .mention-platform {
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 0.5rem;
+        }
+
+        .mention-text {
+            margin-bottom: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .sentiment {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .sentiment.positive {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .sentiment.negative {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .sentiment.neutral {
+            background: #ebf3fd;
+            color: #3498db;
+        }
+
+        /* Proximity Marketing */
+        .campaign-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .campaign-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .campaign-status {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .campaign-status.active {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .map-placeholder {
+            height: 250px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        /* Floating Corby Button */
+        .floating-corby {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.8rem;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(155, 89, 182, 0.4);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-corby:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">🚀 BizFizz</div>
+            <nav class="header-nav">
+                <button class="nav-btn active" onclick="showView('landing')">Home</button>
+                <button class="nav-btn" onclick="showView('consumer')">Consumer App</button>
+                <button class="nav-btn" onclick="showView('restaurant')">Restaurant Dashboard</button>
+                <button class="nav-btn" onclick="showView('corby')">Corby AI</button>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Landing Page -->
+            <div id="landing" class="view active">
+                <div class="landing">
+                    <h1 class="hero-title">🚀 BizFizz</h1>
+                    <p class="hero-subtitle">The Ultimate Restaurant Intelligence & Marketplace Platform</p>
+                    
+                    <div class="cta-buttons">
+                        <button class="cta-btn" onclick="showView('consumer')">
+                            <i class="fas fa-utensils"></i> Discover Restaurants
+                        </button>
+                        <button class="cta-btn secondary" onclick="showView('restaurant')">
+                            <i class="fas fa-chart-line"></i> Restaurant Dashboard
+                        </button>
+                    </div>
+
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🤖</div>
+                            <h3>Corby AI Assistant</h3>
+                            <p>Voice-powered restaurant discovery and booking</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📍</div>
+                            <h3>Proximity Marketing</h3>
+                            <p>Automated location-based customer engagement</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📊</div>
+                            <h3>Real-time Analytics</h3>
+                            <p>Comprehensive business intelligence dashboard</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔍</div>
+                            <h3>Social Monitoring</h3>
+                            <p>Track mentions and sentiment across platforms</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Consumer App -->
+            <div id="consumer" class="view">
+                <h2 style="text-align: center; margin-bottom: 2rem; color: #2c3e50;">
+                    <i class="fas fa-utensils"></i> Discover Amazing Restaurants
+                </h2>
+                
+                <div class="search-bar">
+                    <i class="fas fa-search" style="color: #7f8c8d;"></i>
+                    <input type="text" class="search-input" placeholder="Search restaurants, cuisine, or say 'Hey Corby'..." id="consumerSearch">
+                    <button class="search-btn" onclick="searchRestaurants()">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="voice-btn" onclick="startVoiceSearch()" title="Voice Search">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                </div>
+
+                <div class="restaurant-grid" id="restaurantGrid">
+                    <div class="restaurant-card">
+                        <div class="restaurant-image">📸 The Gourmet Spot</div>
+                        <div class="restaurant-info">
+                            <div class="restaurant-name">The Gourmet Spot</div>
+                            <div class="restaurant-rating">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                4.8 (324 reviews)
+                            </div>
+                            <div class="restaurant-price">$$ • Italian • 0.3 miles</div>
+                            <div style="margin-top: 1rem;">
+                                <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                    Book Table
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="restaurant-card">
+                        <div class="restaurant-image">📸 Sushi Zen</div>
+                        <div class="restaurant-info">
+                            <div class="restaurant-name">Sushi Zen</div>
+                            <div class="restaurant-rating">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="far fa-star"></i>
+                                4.6 (198 reviews)
+                            </div>
+                            <div class="restaurant-price">$$$ • Japanese • 0.5 miles</div>
+                            <div style="margin-top: 1rem;">
+                                <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                    Book Table
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="restaurant-card">
+                        <div class="restaurant-image">📸 Burger Paradise</div>
+                        <div class="restaurant-info">
+                            <div class="restaurant-name">Burger Paradise</div>
+                            <div class="restaurant-rating">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                4.9 (456 reviews)
+                            </div>
+                            <div class="restaurant-price">$ • American • 0.8 miles</div>
+                            <div style="margin-top: 1rem;">
+                                <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                    Book Table
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="restaurant-card">
+                        <div class="restaurant-image">📸 Spice Garden</div>
+                        <div class="restaurant-info">
+                            <div class="restaurant-name">Spice Garden</div>
+                            <div class="restaurant-rating">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="far fa-star"></i>
+                                4.7 (287 reviews)
+                            </div>
+                            <div class="restaurant-price">$$ • Indian • 1.2 miles</div>
+                            <div style="margin-top: 1rem;">
+                                <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                    Book Table
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Restaurant Dashboard -->
+            <div id="restaurant" class="view">
+                <div class="dashboard">
+                    <aside class="sidebar">
+                        <h3 style="margin-bottom: 1.5rem;">Restaurant Dashboard</h3>
+                        <ul class="sidebar-menu">
+                            <li><a href="#" class="active" onclick="showDashboardSection('overview')">
+                                <i class="fas fa-tachometer-alt"></i> Overview
+                            </a></li>
+                            <li><a href="#" onclick="showDashboardSection('analytics')">
+                                <i class="fas fa-chart-bar"></i> Analytics
+                            </a></li>
+                            <li><a href="#" onclick="showDashboardSection('social')">
+                                <i class="fas fa-share-alt"></i> Social Monitoring
+                            </a></li>
+                            <li><a href="#" onclick="showDashboardSection('proximity')">
+                                <i class="fas fa-map-marker-alt"></i> Proximity Marketing
+                            </a></li>
+                            <li><a href="#" onclick="showDashboardSection('reviews')">
+                                <i class="fas fa-star"></i> Reviews
+                            </a></li>
+                            <li><a href="#" onclick="showDashboardSection('reservations')">
+                                <i class="fas fa-calendar"></i> Reservations
+                            </a></li>
+                        </ul>
+                    </aside>
+
+                    <div class="dashboard-content">
+                        <!-- Overview Section -->
+                        <div id="overview" class="dashboard-section active">
+                            <h2 style="margin-bottom: 2rem;">Restaurant Overview</h2>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number">347</div>
+                                    <div class="stat-label">Today's Reservations</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">$23,450</div>
+                                    <div class="stat-label">Today's Revenue</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                                    <div class="stat-number">4.8</div>
+                                    <div class="stat-label">Average Rating</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);">
+                                    <div class="stat-number">89</div>
+                                    <div class="stat-label">Proximity Conversions</div>
+                                </div>
+                            </div>
+
+                            <div class="chart-container">
+                                <div class="chart-title">📊 Revenue Trends (Last 30 Days)</div>
+                                <div class="chart-placeholder">Interactive Revenue Chart</div>
+                            </div>
+
+                            <div class="chart-container">
+                                <div class="chart-title">👥 Customer Demographics</div>
+                                <div class="chart-placeholder">Customer Analysis Dashboard</div>
+                            </div>
+                        </div>
+
+                        <!-- Analytics Section -->
+                        <div id="analytics" class="dashboard-section">
+                            <h2 style="margin-bottom: 2rem;">Advanced Analytics</h2>
+                            
+                            <div class="monitoring-grid">
+                                <div class="chart-container">
+                                    <div class="chart-title">📈 Booking Patterns</div>
+                                    <div class="chart-placeholder">Hourly Booking Analysis</div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-title">🎯 Marketing ROI</div>
+                                    <div class="chart-placeholder">Campaign Performance</div>
+                                </div>
+                            </div>
+
+                            <div class="chart-container">
+                                <div class="chart-title">🏆 Competitive Analysis</div>
+                                <div class="chart-placeholder">Competitor Performance Comparison</div>
+                            </div>
+                        </div>
+
+                        <!-- Social Monitoring Section -->
+                        <div id="social" class="dashboard-section">
+                            <h2 style="margin-bottom: 2rem;">Social Media Monitoring</h2>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number">156</div>
+                                    <div class="stat-label">Today's Mentions</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">87%</div>
+                                    <div class="stat-label">Positive Sentiment</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">
+                                    <div class="stat-number">2</div>
+                                    <div class="stat-label">Crisis Alerts</div>
+                                </div>
+                            </div>
+
+                            <div class="monitoring-grid">
+                                <div>
+                                    <h3 style="margin-bottom: 1rem;">Recent Mentions</h3>
+                                    <div class="mention-card">
+                                        <div class="mention-platform">Twitter</div>
+                                        <div class="mention-text">"Just had the most amazing dinner at Joe's Bistro! The service was exceptional and the food was incredible. Highly recommend!" 🌟</div>
+                                        <span class="sentiment positive">Positive</span>
+                                    </div>
+                                    <div class="mention-card">
+                                        <div class="mention-platform">Google Reviews</div>
+                                        <div class="mention-text">"Great atmosphere and delicious food. Will definitely be back with friends!"</div>
+                                        <span class="sentiment positive">Positive</span>
+                                    </div>
+                                    <div class="mention-card">
+                                        <div class="mention-platform">Yelp</div>
+                                        <div class="mention-text">"Good food but service was a bit slow tonight. Still enjoyed the experience overall."</div>
+                                        <span class="sentiment neutral">Neutral</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 style="margin-bottom: 1rem;">Sentiment Trends</h3>
+                                    <div class="chart-container">
+                                        <div class="chart-placeholder">Sentiment Analysis Chart</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Proximity Marketing Section -->
+                        <div id="proximity" class="dashboard-section">
+                            <h2 style="margin-bottom: 2rem;">Proximity Marketing</h2>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number">1,234</div>
+                                    <div class="stat-label">People Nearby</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">89</div>
+                                    <div class="stat-label">Messages Sent</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                                    <div class="stat-number">34%</div>
+                                    <div class="stat-label">Conversion Rate</div>
+                                </div>
+                            </div>
+
+                            <div class="campaign-card">
+                                <div class="campaign-header">
+                                    <h3>Happy Hour Campaign</h3>
+                                    <span class="campaign-status active">Active</span>
+                                </div>
+                                <p><strong>Target:</strong> People within 0.5 miles, 4-7 PM</p>
+                                <p><strong>Message:</strong> "🍹 Happy Hour at Joe's Bistro! 50% off drinks until 7 PM. Just 2 blocks away!"</p>
+                                <p><strong>Performance:</strong> 67 messages sent, 23 conversions today</p>
+                            </div>
+
+                            <div class="map-placeholder">
+                                📍 Interactive Geofencing Map
+                                <br>
+                                <small>Real-time customer locations and campaign radius</small>
+                            </div>
+                        </div>
+
+                        <!-- Reviews Section -->
+                        <div id="reviews" class="dashboard-section">
+                            <h2 style="margin-bottom: 2rem;">Review Management</h2>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number">4.8</div>
+                                    <div class="stat-label">Average Rating</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">234</div>
+                                    <div class="stat-label">Total Reviews</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);">
+                                    <div class="stat-number">12</div>
+                                    <div class="stat-label">AI Generated Reviews</div>
+                                </div>
+                            </div>
+
+                            <div class="mention-card">
+                                <div class="mention-platform">Recent Review - Google</div>
+                                <div class="mention-text">"Outstanding service and amazing food! The staff was very attentive and the atmosphere was perfect for our anniversary dinner."</div>
+                                <span class="sentiment positive">5 Stars</span>
+                                <div style="margin-top: 1rem;">
+                                    <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                        AI Reply
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reservations Section -->
+                        <div id="reservations" class="dashboard-section">
+                            <h2 style="margin-bottom: 2rem;">Reservation Management</h2>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number">47</div>
+                                    <div class="stat-label">Today's Bookings</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+                                    <div class="stat-number">89%</div>
+                                    <div class="stat-label">Occupancy Rate</div>
+                                </div>
+                                <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                                    <div class="stat-number">23</div>
+                                    <div class="stat-label">Corby Bookings</div>
+                                </div>
+                            </div>
+
+                            <div class="chart-container">
+                                <div class="chart-title">📅 Today's Reservation Schedule</div>
+                                <div class="chart-placeholder">Interactive Reservation Timeline</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Corby AI Interface -->
+            <div id="corby" class="view">
+                <div class="corby-container">
+                    <div class="corby-header">
+                        <div class="corby-avatar">🤖</div>
+                        <h2>Corby AI Assistant</h2>
+                        <p>Your intelligent restaurant companion</p>
+                    </div>
+
+                    <div class="chat-container" id="chatContainer">
+                        <div class="chat-message">
+                            <div class="corby-avatar" style="width: 40px; height: 40px; font-size: 1.2rem;">🤖</div>
+                            <div class="message-bubble">
+                                Hello! I'm Corby, your AI restaurant assistant. I can help you find restaurants, make reservations, compare prices, and even generate reviews. Try saying something like "Find me romantic restaurants with steak and seafood dishes" or "What restaurant has the best price for appetizers?"
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="voice-input">
+                        <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceInput()">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <input type="text" class="search-input" id="textInput" placeholder="Type your message or click the microphone to speak...">
+                        <button class="search-btn" onclick="sendMessage()">Send</button>
+                    </div>
+
+                    <div style="margin-top: 2rem; text-align: center;">
+                        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                            <button class="nav-btn" onclick="sendQuickMessage('Find romantic restaurants')">
+                                Romantic Restaurants
+                            </button>
+                            <button class="nav-btn" onclick="sendQuickMessage('Best price for appetizers')">
+                                Price Comparison
+                            </button>
+                            <button class="nav-btn" onclick="sendQuickMessage('Leave a review for Joe\'s Bistro')">
+                                Generate Review
+                            </button>
+                            <button class="nav-btn" onclick="sendQuickMessage('Book a table for 2')">
+                                Make Reservation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Floating Corby Button -->
+        <div class="floating-corby" onclick="showView('corby')" title="Ask Corby AI">
+            🤖
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let isListening = false;
+        let currentView = 'landing';
+
+        // View Management
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+            
+            // Show selected view
+            document.getElementById(viewName).classList.add('active');
+            
+            // Update navigation
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            currentView = viewName;
+        }
+
+        // Dashboard Section Management
+        function showDashboardSection(sectionName) {
+            // Hide all dashboard sections
+            document.querySelectorAll('.dashboard-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Show selected section
+            document.getElementById(sectionName).style.display = 'block';
+            
+            // Update sidebar menu
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        // Voice Input for Corby
+        function toggleVoiceInput() {
+            const voiceBtn = document.getElementById('voiceBtn');
+            
+            if (!isListening) {
+                isListening = true;
+                voiceBtn.classList.add('listening');
+                voiceBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                
+                // Simulate voice recognition
+                setTimeout(() => {
+                    const sampleQueries = [
+                        "Find me romantic restaurants with steak and seafood dishes",
+                        "What restaurant has the best price for appetizers?",
+                        "Leave Joe's Bistro a good review for me",
+                        "Find casual restaurants for lunch",
+                        "Book a table for 4 people tonight"
+                    ];
+                    
+                    const randomQuery = sampleQueries[Math.floor(Math.random() * sampleQueries.length)];
+                    document.getElementById('textInput').value = randomQuery;
+                    
+                    isListening = false;
+                    voiceBtn.classList.remove('listening');
+                    voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                    
+                    // Auto-send the message
+                    sendMessage();
+                }, 2000);
+            } else {
+                isListening = false;
+                voiceBtn.classList.remove('listening');
+                voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            }
+        }
+
+        // Send Message to Corby
+        function sendMessage() {
+            const input = document.getElementById('textInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message to chat
+            addChatMessage(message, 'user');
+            
+            // Clear input
+            input.value = '';
+            
+            // Simulate Corby response
+            setTimeout(() => {
+                const response = generateCorbyResponse(message);
+                addChatMessage(response, 'corby');
+            }, 1000);
+        }
+
+        // Quick Message Buttons
+        function sendQuickMessage(message) {
+            document.getElementById('textInput').value = message;
+            sendMessage();
+        }
+
+        // Add Chat Message
+        function addChatMessage(message, sender) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            
+            if (sender === 'corby') {
+                messageDiv.innerHTML = `
+                    <div class="corby-avatar" style="width: 40px; height: 40px; font-size: 1.2rem;">🤖</div>
+                    <div class="message-bubble">${message}</div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="message-bubble">${message}</div>
+                `;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Generate Corby Response
+        function generateCorbyResponse(message) {
+            const lowerMessage = message.toLowerCase();
+            
+            if (lowerMessage.includes('romantic') || lowerMessage.includes('date')) {
+                return "Perfect! I found 3 romantic restaurants: The Candlelight Bistro (4.8 stars, $$$), Romance & Wine (4.6 stars, $$), and Intimate Dining (4.9 stars, $$$$). These places have the perfect romantic atmosphere you're looking for. Would you like me to check availability or make a reservation?";
+            } else if (lowerMessage.includes('price') || lowerMessage.includes('cheap') || lowerMessage.includes('affordable')) {
+                return "For the best prices on appetizers, I recommend Casual Corner with appetizers ranging $6-12. Their popular Wings ($9) is highly rated at 4.0 stars. Budget Eats offers appetizers from $5-10, and Family Kitchen has great deals from $7-13. Would you like me to check availability at any of these?";
+            } else if (lowerMessage.includes('review') || lowerMessage.includes('leave')) {
+                return "I'd be happy to help you leave a great review! I've generated a personalized 5-star review: 'Had an absolutely wonderful dining experience! The service was impeccable, food was delicious, and the atmosphere was perfect. The staff went above and beyond to make our evening special. Highly recommend to anyone looking for quality dining!' Should I post this to Google Reviews, Yelp, Facebook, or TripAdvisor?";
+            } else if (lowerMessage.includes('book') || lowerMessage.includes('reservation')) {
+                return "I can help you make a reservation! Based on your preferences, I recommend these available times tonight: 7:00 PM at The Gourmet Spot (4.8 stars), 7:30 PM at Sushi Zen (4.6 stars), or 8:00 PM at Spice Garden (4.7 stars). Which would you prefer, and how many guests will be joining you?";
+            } else if (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('brunch')) {
+                return "Great choice for lunch! I found several excellent lunch spots: Quick Bites Cafe (4.5 stars, $), The Lunch Box (4.7 stars, $$), and Business Lunch Spot (4.4 stars, $$$). All have great lunch specials and quick service. Would you like me to check availability for lunch time?";
+            } else {
+                return "I can help you with restaurant discovery, price comparisons, making reservations, generating reviews, and finding the perfect dining experience! Try asking me about specific cuisines, occasions, or let me know what you're looking for in a restaurant.";
+            }
+        }
+
+        // Search Restaurants (Consumer App)
+        function searchRestaurants() {
+            const searchInput = document.getElementById('consumerSearch');
+            const query = searchInput.value.toLowerCase();
+            
+            // Simulate search results based on query
+            let restaurants = [
+                {
+                    name: "The Gourmet Spot",
+                    rating: "4.8 (324 reviews)",
+                    price: "$$ • Italian • 0.3 miles",
+                    image: "📸 The Gourmet Spot"
+                },
+                {
+                    name: "Sushi Zen",
+                    rating: "4.6 (198 reviews)",
+                    price: "$$$ • Japanese • 0.5 miles",
+                    image: "📸 Sushi Zen"
+                },
+                {
+                    name: "Burger Paradise",
+                    rating: "4.9 (456 reviews)",
+                    price: "$ • American • 0.8 miles",
+                    image: "📸 Burger Paradise"
+                },
+                {
+                    name: "Spice Garden",
+                    rating: "4.7 (287 reviews)",
+                    price: "$$ • Indian • 1.2 miles",
+                    image: "📸 Spice Garden"
+                }
+            ];
+            
+            if (query.includes('romantic') || query.includes('date')) {
+                restaurants = [
+                    {
+                        name: "Candlelight Bistro",
+                        rating: "4.8 (156 reviews)",
+                        price: "$$$ • French • 0.4 miles",
+                        image: "📸 Candlelight Bistro"
+                    },
+                    {
+                        name: "Romance & Wine",
+                        rating: "4.6 (89 reviews)",
+                        price: "$$ • Italian • 0.7 miles",
+                        image: "📸 Romance & Wine"
+                    }
+                ];
+            } else if (query.includes('cheap') || query.includes('budget')) {
+                restaurants = [
+                    {
+                        name: "Budget Eats",
+                        rating: "4.2 (234 reviews)",
+                        price: "$ • American • 0.2 miles",
+                        image: "📸 Budget Eats"
+                    },
+                    {
+                        name: "Value Meals",
+                        rating: "4.0 (178 reviews)",
+                        price: "$ • Fast Food • 0.5 miles",
+                        image: "📸 Value Meals"
+                    }
+                ];
+            }
+            
+            displayRestaurants(restaurants);
+        }
+
+        // Display Restaurants
+        function displayRestaurants(restaurants) {
+            const grid = document.getElementById('restaurantGrid');
+            grid.innerHTML = '';
+            
+            restaurants.forEach(restaurant => {
+                const card = document.createElement('div');
+                card.className = 'restaurant-card';
+                card.innerHTML = `
+                    <div class="restaurant-image">${restaurant.image}</div>
+                    <div class="restaurant-info">
+                        <div class="restaurant-name">${restaurant.name}</div>
+                        <div class="restaurant-rating">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            ${restaurant.rating}
+                        </div>
+                        <div class="restaurant-price">${restaurant.price}</div>
+                        <div style="margin-top: 1rem;">
+                            <button class="cta-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                                Book Table
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Voice Search for Consumer App
+        function startVoiceSearch() {
+            const voiceBtn = event.target;
+            voiceBtn.classList.add('listening');
+            
+            setTimeout(() => {
+                const sampleSearches = [
+                    "romantic restaurants near me",
+                    "best sushi restaurants",
+                    "cheap eats in the area",
+                    "italian restaurants with outdoor seating"
+                ];
+                
+                const randomSearch = sampleSearches[Math.floor(Math.random() * sampleSearches.length)];
+                document.getElementById('consumerSearch').value = randomSearch;
+                voiceBtn.classList.remove('listening');
+                searchRestaurants();
+            }, 2000);
+        }
+
+        // Initialize dashboard sections
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hide all dashboard sections except overview
+            document.querySelectorAll('.dashboard-section').forEach(section => {
+                if (section.id !== 'overview') {
+                    section.style.display = 'none';
+                }
+            });
+        });
+
+        // Handle Enter key in text inputs
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (e.target.id === 'textInput') {
+                    sendMessage();
+                } else if (e.target.id === 'consumerSearch') {
+                    searchRestaurants();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
